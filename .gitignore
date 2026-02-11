@@ -16,6 +16,9 @@ build/
 # User config (use config.example.json as a template)
 config.json
 
+# Environment variables
+.env
+
 # OS
 .DS_Store
 Thumbs.db

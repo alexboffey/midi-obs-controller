@@ -5,6 +5,9 @@ import re
 import time
 import threading
 
+from dotenv import load_dotenv
+load_dotenv()
+
 import mido
 mido.set_backend("mido.backends.pygame")
 import obsws_python as obs
@@ -13,10 +16,10 @@ import obsws_python as obs
 # Configuration
 # ---------------------------------------------------------------------------
 
-# OBS WebSocket connection
-OBS_HOST = "localhost"
-OBS_PORT = 4455
-OBS_PASSWORD = "HrCDuVNv7Sfxdxzi"
+# OBS WebSocket connection (override via .env file)
+OBS_HOST = os.getenv("OBS_HOST", "localhost")
+OBS_PORT = int(os.getenv("OBS_PORT", "4455"))
+OBS_PASSWORD = os.getenv("OBS_PASSWORD", "HrCDuVNv7Sfxdxzi")
 
 # Set to a specific port name, or None to pick the first available input
 MIDI_PORT_NAME = None
