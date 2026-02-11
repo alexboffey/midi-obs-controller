@@ -30,7 +30,7 @@ Single-file script (`main.py`) with no web server or UI. Connects to OBS via Web
 | `config.example.json` | Template config committed to repo |
 | `test_main.py` | Unit tests (pytest) |
 | `requirements.txt` | Python dependencies |
-| `.github/workflows/test.yml` | CI — runs tests on push/PR to main |
+| `.github/workflows/ci.yml` | CI — runs tests and dep audit on push/PR to main |
 
 ## Tech stack
 
@@ -46,3 +46,9 @@ Single-file script (`main.py`) with no web server or UI. Connects to OBS via Web
 - Scene names use prefixes (e.g. `LOOP_A_1`, `LOOP_A_2`) and are natural-sorted
 - Only one loop/sequence runs at a time — starting a new one cancels the previous
 - Cross-platform: macOS, Windows, Linux
+
+## When making changes
+
+- **Tests** — write or update unit tests in `test_main.py` for any new or changed behavior. Run `python -m pytest test_main.py -v` to verify.
+- **Documentation** — update `README.md` when adding features, changing config format, or modifying behavior. Keep the action types, loop styles, and sequencer sections current.
+- **AGENTS.md** — update this file if the architecture, key concepts, or conventions change.

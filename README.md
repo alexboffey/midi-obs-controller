@@ -62,7 +62,7 @@ The JSON file maps MIDI note numbers (as strings) to action objects:
 
 ```json
 {
-  "48": {"action": "loop", "prefix": "LOOP_A_", "style": "cycle", "tick": 2.0},
+  "48": {"action": "loop", "prefix": "LOOP_A_", "style": "cycle", "bpm": 120, "steps": 4},
   "43": {"action": "kill", "scene": "STATIC_1"}
 }
 ```
@@ -145,6 +145,58 @@ Sequences loop continuously by default. After the last step, the sequence wraps 
 | `shuffle` | Randomize order once, then cycle that order |
 
 Each entry has `bpm` and `steps` values so you can control the speed per loop in musical terms.
+
+## Sequencer
+
+Sequences let you chain multiple actions together. They loop continuously by default — after the last step, the sequence wraps back to step 1.
+
+### Step types
+
+| Action | Description |
+|---|---|
+| `loop` | Run a loop for a number of repeats (default: 1), then advance |
+| `pause` | Hold the current scene until the resume note is pressed |
+| `kill` | Switch to a static scene and **end** the sequence |
+| `stop` | **End** the sequence without changing the scene |
+
+`kill` and `stop` are **terminal actions** — the sequence ends when it reaches one. If the last step is a `loop`, the sequence wraps back to step 1 and keeps going.
+
+### Example: loop forever
+
+```json
+{"action": "sequence", "steps": [
+  {"action": "loop", "prefix": "LOOP_A_", "style": "cycle",  "bpm": 120, "steps": 4, "repeats": 2},
+  {"action": "loop", "prefix": "LOOP_A_", "style": "bounce", "bpm": 120, "steps": 2, "repeats": 3}
+]}
+```
+
+### Example: loop then end on a static scene
+
+```json
+{"action": "sequence", "steps": [
+  {"action": "loop", "prefix": "LOOP_A_", "style": "cycle", "bpm": 120, "steps": 4, "repeats": 2},
+  {"action": "kill", "scene": "STATIC_1"}
+]}
+```
+
+### Example: pause mid-sequence
+
+```json
+{"action": "sequence", "steps": [
+  {"action": "loop", "prefix": "LOOP_A_", "style": "cycle",  "bpm": 120, "steps": 4, "repeats": 2},
+  {"action": "pause"},
+  {"action": "loop", "prefix": "LOOP_A_", "style": "bounce", "bpm": 120, "steps": 2, "repeats": 2},
+  {"action": "stop"}
+]}
+```
+
+When the sequence hits `pause`, it holds the current scene and waits. Press the same MIDI note that started the sequence to resume. To use a different resume note, set `"resume_note"`:
+
+```json
+{"action": "pause", "resume_note": 42}
+```
+
+Pressing any other mapped MIDI note cancels the sequence entirely.
 
 ## Usage
 

@@ -2,3 +2,4 @@ mido
 pygame
 obsws-python
 pytest
+pip-audit
