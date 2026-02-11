@@ -36,65 +36,66 @@ MIDI_DEBUG = False
 #   {"action": "kill", "scene": "STATIC_1"}
 #
 # --- Loop actions (cycle through scenes matching a prefix) ---
-# Each loop action requires: action, prefix, style, tick
+# Each loop action requires: action, prefix, style, bpm, steps
+# Timing: each scene switch happens after (60/bpm)*steps seconds.
 #
 # "cycle" – loops forward: 1,2,3,1,2,3 …
-#   {"action": "loop", "prefix": "LOOP_A_", "style": "cycle", "tick": 2.0}
+#   {"action": "loop", "prefix": "LOOP_A_", "style": "cycle", "bpm": 120, "steps": 4}
 #
 # "bounce" – ping-pong: 1,2,3,2,1,2,3,2,1 …
-#   {"action": "loop", "prefix": "LOOP_A_", "style": "bounce", "tick": 2.0}
+#   {"action": "loop", "prefix": "LOOP_A_", "style": "bounce", "bpm": 120, "steps": 4}
 #
 # "reverse" – loops backward: 3,2,1,3,2,1 …
-#   {"action": "loop", "prefix": "LOOP_A_", "style": "reverse", "tick": 2.0}
+#   {"action": "loop", "prefix": "LOOP_A_", "style": "reverse", "bpm": 120, "steps": 4}
 #
 # "once" – plays forward then holds on last scene: 1,2,3 → stop
-#   {"action": "loop", "prefix": "LOOP_A_", "style": "once", "tick": 2.0}
+#   {"action": "loop", "prefix": "LOOP_A_", "style": "once", "bpm": 120, "steps": 4}
 #
-# "random" – picks a random scene each tick
-#   {"action": "loop", "prefix": "LOOP_A_", "style": "random", "tick": 0.5}
+# "random" – picks a random scene each beat
+#   {"action": "loop", "prefix": "LOOP_A_", "style": "random", "bpm": 120, "steps": 2}
 #
 # "random_no_repeat" – random, but never the same scene twice in a row
-#   {"action": "loop", "prefix": "LOOP_A_", "style": "random_no_repeat", "tick": 0.5}
+#   {"action": "loop", "prefix": "LOOP_A_", "style": "random_no_repeat", "bpm": 120, "steps": 2}
 #
 # "strobe" – alternates between first and last scene
-#   {"action": "loop", "prefix": "LOOP_A_", "style": "strobe", "tick": 0.25}
+#   {"action": "loop", "prefix": "LOOP_A_", "style": "strobe", "bpm": 120, "steps": 1}
 #
 # "shuffle" – randomizes scene order once, then cycles that order
-#   {"action": "loop", "prefix": "LOOP_A_", "style": "shuffle", "tick": 2.0}
+#   {"action": "loop", "prefix": "LOOP_A_", "style": "shuffle", "bpm": 120, "steps": 4}
 #
 # --- Sequence action (run a series of steps in order) ---
 # Each step is a loop or kill action with an optional "repeats" field.
 # "repeats" = number of full cycles before advancing to the next step.
 # The last loop step runs indefinitely until cancelled.
 #   {"action": "sequence", "steps": [
-#       {"action": "loop", "prefix": "LOOP_A_", "style": "cycle",  "tick": 2.0, "repeats": 3},
-#       {"action": "loop", "prefix": "LOOP_A_", "style": "bounce", "tick": 1.0, "repeats": 2},
+#       {"action": "loop", "prefix": "LOOP_A_", "style": "cycle",  "bpm": 120, "steps": 4, "repeats": 3},
+#       {"action": "loop", "prefix": "LOOP_A_", "style": "bounce", "bpm": 120, "steps": 2, "repeats": 2},
 #       {"action": "kill", "scene": "STATIC_1"}
 #   ]}
 #
 # Note numbers: C2=36 … C3=48 … (MIDI convention where C3 = 48)
 
 DEFAULT_MIDI_MAP = {
-    36: {"action": "sequence", "steps": [                                                    # C2
-        {"action": "loop", "prefix": "LOOP_A_", "style": "cycle",  "tick": 2.0, "repeats": 3},
-        {"action": "loop", "prefix": "LOOP_A_", "style": "bounce", "tick": 1.0, "repeats": 2},
+    36: {"action": "sequence", "steps": [                                                                   # C2
+        {"action": "loop", "prefix": "LOOP_A_", "style": "cycle",  "bpm": 120, "steps": 4, "repeats": 3},
+        {"action": "loop", "prefix": "LOOP_A_", "style": "bounce", "bpm": 120, "steps": 2, "repeats": 2},
         {"action": "kill", "scene": "STATIC_1"},
     ]},
-    37: {"action": "loop", "prefix": "LOOP_A_", "style": "bounce",           "tick": 2.0},  # C#2
-    38: {"action": "loop", "prefix": "LOOP_A_", "style": "reverse",          "tick": 2.0},  # D2
-    39: {"action": "loop", "prefix": "LOOP_A_", "style": "once",             "tick": 2.0},  # D#2
-    40: {"action": "loop", "prefix": "LOOP_A_", "style": "random",           "tick": 1.0},  # E2
-    41: {"action": "loop", "prefix": "LOOP_A_", "style": "random_no_repeat", "tick": 1.0},  # F2
-    42: {"action": "loop", "prefix": "LOOP_A_", "style": "strobe",           "tick": 0.5},  # F#2
-    43: {"action": "loop", "prefix": "LOOP_A_", "style": "shuffle",          "tick": 2.0},  # G2
-    44: {"action": "loop", "prefix": "LOOP_H_", "style": "cycle",            "tick": 2.0},  # G#2
-    45: {"action": "loop", "prefix": "LOOP_I_", "style": "cycle",            "tick": 2.0},  # A2
-    46: {"action": "loop", "prefix": "LOOP_J_", "style": "cycle",            "tick": 2.0},  # A#2
-    47: {"action": "loop", "prefix": "LOOP_K_", "style": "cycle",            "tick": 2.0},  # B2
-    48: {"action": "loop", "prefix": "LOOP_L_", "style": "cycle",            "tick": 2.0},  # C3
-    49: {"action": "loop", "prefix": "LOOP_M_", "style": "bounce",           "tick": 0.4839 / 2},  # C#3
-    50: {"action": "loop", "prefix": "LOOP_N_", "style": "cycle",            "tick": 2.0},  # D3
-    51: {"action": "kill", "scene": "STATIC_2"},                                             # D#3
+    37: {"action": "loop", "prefix": "LOOP_A_", "style": "bounce",           "bpm": 120, "steps": 4},  # C#2
+    38: {"action": "loop", "prefix": "LOOP_A_", "style": "reverse",          "bpm": 120, "steps": 4},  # D2
+    39: {"action": "loop", "prefix": "LOOP_A_", "style": "once",             "bpm": 120, "steps": 4},  # D#2
+    40: {"action": "loop", "prefix": "LOOP_A_", "style": "random",           "bpm": 120, "steps": 2},  # E2
+    41: {"action": "loop", "prefix": "LOOP_A_", "style": "random_no_repeat", "bpm": 120, "steps": 2},  # F2
+    42: {"action": "loop", "prefix": "LOOP_A_", "style": "strobe",           "bpm": 120, "steps": 1},  # F#2
+    43: {"action": "loop", "prefix": "LOOP_A_", "style": "shuffle",          "bpm": 120, "steps": 4},  # G2
+    44: {"action": "loop", "prefix": "LOOP_H_", "style": "cycle",            "bpm": 120, "steps": 4},  # G#2
+    45: {"action": "loop", "prefix": "LOOP_I_", "style": "cycle",            "bpm": 120, "steps": 4},  # A2
+    46: {"action": "loop", "prefix": "LOOP_J_", "style": "cycle",            "bpm": 120, "steps": 4},  # A#2
+    47: {"action": "loop", "prefix": "LOOP_K_", "style": "cycle",            "bpm": 120, "steps": 4},  # B2
+    48: {"action": "loop", "prefix": "LOOP_L_", "style": "cycle",            "bpm": 120, "steps": 4},  # C3
+    49: {"action": "loop", "prefix": "LOOP_M_", "style": "bounce",           "bpm": 124, "steps": 1},  # C#3
+    50: {"action": "loop", "prefix": "LOOP_N_", "style": "cycle",            "bpm": 120, "steps": 4},  # D3
+    51: {"action": "kill", "scene": "STATIC_2"},                                                         # D#3
 }
 
 CONFIG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.json")
@@ -130,6 +131,11 @@ MIDI_MAP = load_config()
 
 stop_event = threading.Event()   # set() to signal the loop to stop
 loop_thread = None  # type: threading.Thread | None
+
+
+def calc_tick(bpm: float, steps: float) -> float:
+    """Convert BPM + steps (beats) into seconds per scene switch."""
+    return (60.0 / bpm) * steps
 
 
 def natural_sort_key(s: str):
@@ -275,7 +281,7 @@ def run_sequence(client: obs.ReqClient, steps: list[dict]):
         elif kind == "loop":
             prefix = step["prefix"]
             style = step.get("style", "cycle")
-            tick = step.get("tick", 2.0)
+            tick = calc_tick(step["bpm"], step["steps"])
             repeats = None if is_last else step.get("repeats", 1)
 
             scenes = get_scenes_by_prefix(client, prefix)
@@ -284,7 +290,7 @@ def run_sequence(client: obs.ReqClient, steps: list[dict]):
                 continue
 
             sequence = build_sequence(scenes, style)
-            print(f"[seq] Step {i + 1}/{len(steps)} – {style} loop (prefix={prefix}, tick={tick}s, repeats={repeats})")
+            print(f"[seq] Step {i + 1}/{len(steps)} – {style} loop (prefix={prefix}, tick={tick:.3f}s, repeats={repeats})")
             scene_loop(client, sequence, tick, style, max_repeats=repeats)
 
     print("[seq] Sequence complete.")
@@ -318,8 +324,8 @@ def handle_midi(msg, client: obs.ReqClient):
     if kind == "loop":
         prefix = entry["prefix"]
         style = entry.get("style", "cycle")
-        tick = entry.get("tick", 2.0)
-        print(f"[midi] note {msg.note} – {style} loop (prefix={prefix}, tick={tick}s)")
+        tick = calc_tick(entry["bpm"], entry["steps"])
+        print(f"[midi] note {msg.note} – {style} loop (prefix={prefix}, bpm={entry['bpm']}, steps={entry['steps']}, tick={tick:.3f}s)")
         start_loop(client, prefix, style, tick)
     elif kind == "kill":
         scene = entry["scene"]
@@ -370,8 +376,9 @@ def main():
         # Skip MIDI – run the first "loop" action from MIDI_MAP
         first = next((e for e in MIDI_MAP.values() if e["action"] == "loop"), None)
         if first:
+            tick = calc_tick(first["bpm"], first["steps"])
             print(f"[test] TEST_MODE – starting loop (prefix={first['prefix']})")
-            start_loop(client, first["prefix"], first.get("style", "cycle"), first.get("tick", 2.0))
+            start_loop(client, first["prefix"], first.get("style", "cycle"), tick)
         try:
             while True:
                 time.sleep(0.5)

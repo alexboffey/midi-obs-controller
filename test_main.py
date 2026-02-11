@@ -348,8 +348,8 @@ class TestRunSequence:
     def test_sequence_runs_steps_in_order(self):
         client = make_mock_client(["P_1", "P_2", "P_3"])
         steps = [
-            {"action": "loop", "prefix": "P_", "style": "cycle", "tick": 0.01, "repeats": 1},
-            {"action": "loop", "prefix": "P_", "style": "reverse", "tick": 0.01, "repeats": 1},
+            {"action": "loop", "prefix": "P_", "style": "cycle", "bpm": 6000, "steps": 1, "repeats": 1},
+            {"action": "loop", "prefix": "P_", "style": "reverse", "bpm": 6000, "steps": 1, "repeats": 1},
         ]
         call_count = 0
 
@@ -373,7 +373,7 @@ class TestRunSequence:
         """Kill as the last step — no infinite loop, runs to completion."""
         client = make_mock_client(["P_1", "P_2"])
         steps = [
-            {"action": "loop", "prefix": "P_", "style": "cycle", "tick": 0.01, "repeats": 1},
+            {"action": "loop", "prefix": "P_", "style": "cycle", "bpm": 6000, "steps": 1, "repeats": 1},
             {"action": "kill", "scene": "STATIC_1"},
         ]
 
@@ -389,8 +389,8 @@ class TestRunSequence:
     def test_sequence_cancelled_by_stop_event(self):
         client = make_mock_client(["P_1", "P_2"])
         steps = [
-            {"action": "loop", "prefix": "P_", "style": "cycle", "tick": 0.01, "repeats": 1},
-            {"action": "loop", "prefix": "P_", "style": "cycle", "tick": 0.01, "repeats": 1},
+            {"action": "loop", "prefix": "P_", "style": "cycle", "bpm": 6000, "steps": 1, "repeats": 1},
+            {"action": "loop", "prefix": "P_", "style": "cycle", "bpm": 6000, "steps": 1, "repeats": 1},
         ]
 
         # Set stop_event before running — should abort immediately
@@ -402,7 +402,7 @@ class TestRunSequence:
     def test_sequence_cancel_mid_loop(self):
         client = make_mock_client(["P_1", "P_2", "P_3"])
         steps = [
-            {"action": "loop", "prefix": "P_", "style": "cycle", "tick": 0.01, "repeats": 2},
+            {"action": "loop", "prefix": "P_", "style": "cycle", "bpm": 6000, "steps": 1, "repeats": 2},
             {"action": "kill", "scene": "SHOULD_NOT_REACH"},
         ]
         call_count = 0
@@ -426,7 +426,7 @@ class TestRunSequence:
     def test_sequence_last_loop_runs_indefinitely(self):
         client = make_mock_client(["P_1", "P_2"])
         steps = [
-            {"action": "loop", "prefix": "P_", "style": "cycle", "tick": 0.01, "repeats": 3},
+            {"action": "loop", "prefix": "P_", "style": "cycle", "bpm": 6000, "steps": 1, "repeats": 3},
         ]
         call_count = 0
 
@@ -449,7 +449,7 @@ class TestRunSequence:
         """Non-last loop steps respect their repeats count before advancing."""
         client = make_mock_client(["P_1", "P_2"])
         steps = [
-            {"action": "loop", "prefix": "P_", "style": "cycle", "tick": 0.01, "repeats": 2},
+            {"action": "loop", "prefix": "P_", "style": "cycle", "bpm": 6000, "steps": 1, "repeats": 2},
             {"action": "kill", "scene": "DONE"},
         ]
 
@@ -460,3 +460,31 @@ class TestRunSequence:
         calls = [c.args[0] for c in client.set_current_program_scene.call_args_list]
         # 2 repeats of [P_1, P_2] = 4 scenes, then kill
         assert calls == ["P_1", "P_2", "P_1", "P_2", "DONE"]
+
+
+# ---------------------------------------------------------------------------
+# calc_tick tests
+# ---------------------------------------------------------------------------
+
+class TestCalcTick:
+
+    def test_120_bpm_4_steps(self):
+        # (60/120) * 4 = 2.0s
+        assert main.calc_tick(120, 4) == 2.0
+
+    def test_120_bpm_1_step(self):
+        # (60/120) * 1 = 0.5s
+        assert main.calc_tick(120, 1) == 0.5
+
+    def test_60_bpm_1_step(self):
+        # (60/60) * 1 = 1.0s
+        assert main.calc_tick(60, 1) == 1.0
+
+    def test_140_bpm_2_steps(self):
+        # (60/140) * 2 ≈ 0.857s
+        result = main.calc_tick(140, 2)
+        assert abs(result - (60.0 / 140 * 2)) < 0.001
+
+    def test_high_bpm_fast_tick(self):
+        # 240 BPM, 1 step = 0.25s
+        assert main.calc_tick(240, 1) == 0.25

@@ -80,8 +80,12 @@ If you prefer not to use a separate file, edit the `DEFAULT_MIDI_MAP` dict direc
 **Loop** — cycle through all OBS scenes matching a prefix:
 
 ```json
-{"action": "loop", "prefix": "LOOP_A_", "style": "cycle", "tick": 2.0}
+{"action": "loop", "prefix": "LOOP_A_", "style": "cycle", "bpm": 120, "steps": 4}
 ```
+
+- `bpm` — tempo in beats per minute
+- `steps` — number of beats per scene switch
+- Scene switch interval = `(60 / bpm) * steps` seconds (e.g. 120 BPM, 4 steps = 2.0s)
 
 **Kill** — stop any running loop and switch to a static scene:
 
@@ -95,8 +99,8 @@ If you prefer not to use a separate file, edit the `DEFAULT_MIDI_MAP` dict direc
 {
   "action": "sequence",
   "steps": [
-    {"action": "loop", "prefix": "LOOP_A_", "style": "cycle",  "tick": 2.0, "repeats": 3},
-    {"action": "loop", "prefix": "LOOP_A_", "style": "bounce", "tick": 1.0, "repeats": 2},
+    {"action": "loop", "prefix": "LOOP_A_", "style": "cycle",  "bpm": 120, "steps": 4, "repeats": 3},
+    {"action": "loop", "prefix": "LOOP_A_", "style": "bounce", "bpm": 120, "steps": 2, "repeats": 2},
     {"action": "kill", "scene": "STATIC_1"}
   ]
 }
@@ -115,12 +119,12 @@ If you prefer not to use a separate file, edit the `DEFAULT_MIDI_MAP` dict direc
 | `bounce` | Ping-pong: 1, 2, 3, 2, 1, 2, 3 … |
 | `reverse` | Backward loop: 3, 2, 1, 3, 2, 1 … |
 | `once` | Play forward then hold on last scene: 1, 2, 3 → stop |
-| `random` | Random scene each tick |
+| `random` | Random scene each beat |
 | `random_no_repeat` | Random, never the same scene twice in a row |
 | `strobe` | Alternate between first and last scene |
 | `shuffle` | Randomize order once, then cycle that order |
 
-Each entry has a `tick` value (in seconds) so you can control the speed per loop independently.
+Each entry has `bpm` and `steps` values so you can control the speed per loop in musical terms.
 
 ## Usage
 
