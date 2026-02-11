@@ -62,10 +62,24 @@ MIDI_DEBUG = False
 # "shuffle" – randomizes scene order once, then cycles that order
 #   {"action": "loop", "prefix": "LOOP_A_", "style": "shuffle", "tick": 2.0}
 #
+# --- Sequence action (run a series of steps in order) ---
+# Each step is a loop or kill action with an optional "repeats" field.
+# "repeats" = number of full cycles before advancing to the next step.
+# The last loop step runs indefinitely until cancelled.
+#   {"action": "sequence", "steps": [
+#       {"action": "loop", "prefix": "LOOP_A_", "style": "cycle",  "tick": 2.0, "repeats": 3},
+#       {"action": "loop", "prefix": "LOOP_A_", "style": "bounce", "tick": 1.0, "repeats": 2},
+#       {"action": "kill", "scene": "STATIC_1"}
+#   ]}
+#
 # Note numbers: C2=36 … C3=48 … (MIDI convention where C3 = 48)
 
 DEFAULT_MIDI_MAP = {
-    36: {"action": "loop", "prefix": "LOOP_A_", "style": "cycle",            "tick": 2.0},  # C2
+    36: {"action": "sequence", "steps": [                                                    # C2
+        {"action": "loop", "prefix": "LOOP_A_", "style": "cycle",  "tick": 2.0, "repeats": 3},
+        {"action": "loop", "prefix": "LOOP_A_", "style": "bounce", "tick": 1.0, "repeats": 2},
+        {"action": "kill", "scene": "STATIC_1"},
+    ]},
     37: {"action": "loop", "prefix": "LOOP_A_", "style": "bounce",           "tick": 2.0},  # C#2
     38: {"action": "loop", "prefix": "LOOP_A_", "style": "reverse",          "tick": 2.0},  # D2
     39: {"action": "loop", "prefix": "LOOP_A_", "style": "once",             "tick": 2.0},  # D#2
@@ -149,31 +163,47 @@ def build_sequence(scenes: list[str], style: str) -> list[str]:
     return list(scenes)
 
 
-def scene_loop(client: obs.ReqClient, sequence: list[str], tick: float, style: str):
-    """Cycle through *sequence* until stop_event is set."""
+def scene_loop(client: obs.ReqClient, sequence: list[str], tick: float, style: str,
+               max_repeats=None):
+    """Cycle through *sequence* until stop_event is set or max_repeats reached.
+
+    One "repeat" = one full pass through the sequence list.
+    If max_repeats is None, loops forever (until stop_event).
+    """
     idx = 0
     last_scene = None
-    print(f"[loop] Starting {style} loop – {len(sequence)} steps, tick={tick}s")
+    seq_len = len(sequence)
+    repeat_info = f", repeats={max_repeats}" if max_repeats is not None else ""
+    print(f"[loop] Starting {style} loop – {seq_len} steps, tick={tick}s{repeat_info}")
     while not stop_event.is_set():
+        # Check if we've completed enough repeats
+        if max_repeats is not None and style != "once":
+            if idx // seq_len >= max_repeats:
+                print(f"[loop] Completed {max_repeats} repeat(s).")
+                break
+
         # Pick the next scene based on style
         if style == "random":
             scene = random.choice(sequence)
+            idx += 1
         elif style == "random_no_repeat":
             choices = [s for s in sequence if s != last_scene] or sequence
             scene = random.choice(choices)
+            idx += 1
         elif style == "once":
-            if idx >= len(sequence):
+            if idx >= seq_len:
                 print(f"[loop] Finished (once) – holding on {last_scene}")
                 break
             scene = sequence[idx]
+            idx += 1
         else:
             # cycle, bounce, reverse, strobe, shuffle all just wrap around
-            scene = sequence[idx % len(sequence)]
+            scene = sequence[idx % seq_len]
+            idx += 1
 
         print(f"[loop] -> {scene}")
         client.set_current_program_scene(scene)
         last_scene = scene
-        idx += 1
         # Use wait() instead of sleep() so we can interrupt immediately
         stop_event.wait(tick)
     print("[loop] Stopped.")
@@ -219,6 +249,60 @@ def kill_switch(client: obs.ReqClient, scene_name: str):
         print(f"[kill] Failed to switch to '{scene_name}': {e}")
 
 
+def run_sequence(client: obs.ReqClient, steps: list[dict]):
+    """Run a sequence of loop/kill steps in order.
+
+    Each step is a standard action dict with an optional "repeats" field.
+    The last loop step runs indefinitely (until cancelled).
+    Aborts early if stop_event is set (e.g. another MIDI note pressed).
+    """
+    for i, step in enumerate(steps):
+        if stop_event.is_set():
+            print("[seq] Cancelled.")
+            return
+
+        kind = step["action"]
+        is_last = (i == len(steps) - 1)
+
+        if kind == "kill":
+            scene = step["scene"]
+            print(f"[seq] Step {i + 1}/{len(steps)} – kill (scene={scene})")
+            try:
+                client.set_current_program_scene(scene)
+            except Exception as e:
+                print(f"[seq] Failed to switch to '{scene}': {e}")
+
+        elif kind == "loop":
+            prefix = step["prefix"]
+            style = step.get("style", "cycle")
+            tick = step.get("tick", 2.0)
+            repeats = None if is_last else step.get("repeats", 1)
+
+            scenes = get_scenes_by_prefix(client, prefix)
+            if not scenes:
+                print(f"[seq] Step {i + 1}/{len(steps)} – no scenes for '{prefix}', skipping")
+                continue
+
+            sequence = build_sequence(scenes, style)
+            print(f"[seq] Step {i + 1}/{len(steps)} – {style} loop (prefix={prefix}, tick={tick}s, repeats={repeats})")
+            scene_loop(client, sequence, tick, style, max_repeats=repeats)
+
+    print("[seq] Sequence complete.")
+
+
+def start_sequence(client: obs.ReqClient, steps: list[dict]):
+    """Stop any existing loop/sequence and start a new sequence."""
+    global loop_thread
+
+    stop_loop()
+
+    stop_event.clear()
+    loop_thread = threading.Thread(
+        target=run_sequence, args=(client, steps), daemon=True
+    )
+    loop_thread.start()
+
+
 def handle_midi(msg, client: obs.ReqClient):
     """React to incoming MIDI messages using MIDI_MAP."""
     if msg.type != "note_on" or msg.velocity == 0:
@@ -241,6 +325,10 @@ def handle_midi(msg, client: obs.ReqClient):
         scene = entry["scene"]
         print(f"[midi] note {msg.note} – kill switch (scene={scene})")
         kill_switch(client, scene)
+    elif kind == "sequence":
+        steps = entry["steps"]
+        print(f"[midi] note {msg.note} – sequence ({len(steps)} steps)")
+        start_sequence(client, steps)
 
 
 def midi_debug_loop(port_name: str):

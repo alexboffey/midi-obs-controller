@@ -89,6 +89,24 @@ If you prefer not to use a separate file, edit the `DEFAULT_MIDI_MAP` dict direc
 {"action": "kill", "scene": "STATIC_1"}
 ```
 
+**Sequence** — run a series of loop/kill steps in order:
+
+```json
+{
+  "action": "sequence",
+  "steps": [
+    {"action": "loop", "prefix": "LOOP_A_", "style": "cycle",  "tick": 2.0, "repeats": 3},
+    {"action": "loop", "prefix": "LOOP_A_", "style": "bounce", "tick": 1.0, "repeats": 2},
+    {"action": "kill", "scene": "STATIC_1"}
+  ]
+}
+```
+
+- `repeats` controls how many full cycles a step runs before advancing to the next step
+- The last loop step in a sequence runs indefinitely until cancelled
+- Kill steps switch scene immediately and advance to the next step
+- Pressing any other mapped MIDI note cancels the running sequence
+
 ## Loop Styles
 
 | Style | Behaviour |

@@ -13,6 +13,10 @@
   "47": {"action": "loop", "prefix": "LOOP_K_", "style": "cycle",  "tick": 2.0},
   "48": {"action": "loop", "prefix": "LOOP_L_", "style": "cycle",  "tick": 2.0},
   "49": {"action": "loop", "prefix": "LOOP_M_", "style": "bounce", "tick": 1.5},
-  "50": {"action": "loop", "prefix": "LOOP_N_", "style": "cycle",  "tick": 2.0},
+  "50": {"action": "sequence", "steps": [
+    {"action": "loop", "prefix": "LOOP_A_", "style": "cycle",  "tick": 2.0, "repeats": 2},
+    {"action": "loop", "prefix": "LOOP_B_", "style": "bounce", "tick": 1.0, "repeats": 3},
+    {"action": "kill", "scene": "STATIC_1"}
+  ]},
   "51": {"action": "kill", "scene": "STATIC_2"}
 }
