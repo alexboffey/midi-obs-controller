@@ -99,7 +99,16 @@ If you prefer not to use a separate file, edit the `DEFAULT_MIDI_MAP` dict direc
 {"action": "stop"}
 ```
 
-**Sequence** — run a series of loop/kill/stop steps in order:
+**Pause** — hold the current scene until resumed:
+
+```json
+{"action": "pause"}
+{"action": "pause", "resume_note": 42}
+```
+
+By default the resume note is the same MIDI note that started the sequence. Use `resume_note` to override. Pressing any other mapped note cancels the sequence.
+
+**Sequence** — run a series of loop/kill/stop/pause steps in order:
 
 Sequences loop continuously by default. After the last step, the sequence wraps back to step 1. Use a terminal action (`kill` or `stop`) as the last step to end the sequence instead.
 
@@ -108,6 +117,7 @@ Sequences loop continuously by default. After the last step, the sequence wraps 
   "action": "sequence",
   "steps": [
     {"action": "loop", "prefix": "LOOP_A_", "style": "cycle",  "bpm": 120, "steps": 4, "repeats": 3},
+    {"action": "pause"},
     {"action": "loop", "prefix": "LOOP_A_", "style": "bounce", "bpm": 120, "steps": 2, "repeats": 2},
     {"action": "kill", "scene": "STATIC_1"}
   ]
@@ -118,6 +128,7 @@ Sequences loop continuously by default. After the last step, the sequence wraps 
 - Sequences loop continuously — omit a terminal action to repeat forever
 - `kill` as the last step ends the sequence and switches to a static scene
 - `stop` as the last step ends the sequence silently (holds the last scene)
+- `pause` holds the current scene until the resume note is pressed
 - Pressing any other mapped MIDI note cancels the running sequence
 
 ## Loop Styles

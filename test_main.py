@@ -472,6 +472,105 @@ class TestRunSequence:
         # 2 repeats of [P_1, P_2] = 4 scenes, then kill
         assert calls == ["P_1", "P_2", "P_1", "P_2", "DONE"]
 
+    def test_pause_resumes_and_continues(self):
+        """Pause waits for resume_event, then continues to the next step."""
+        client = make_mock_client(["P_1", "P_2"])
+        steps = [
+            {"action": "loop", "prefix": "P_", "style": "cycle", "bpm": 6000, "steps": 1, "repeats": 1},
+            {"action": "pause"},
+            {"action": "kill", "scene": "DONE"},
+        ]
+
+        def fake_resume_wait(timeout):
+            """Simulate the resume arriving immediately."""
+            main.resume_event.set()
+
+        main.stop_event.clear()
+        main.resume_event.clear()
+        main.pause_resume_note = None
+
+        with patch.object(main.stop_event, "wait"), \
+             patch.object(main.resume_event, "wait", side_effect=fake_resume_wait):
+            main.run_sequence(client, steps, trigger_note=36)
+
+        calls = [c.args[0] for c in client.set_current_program_scene.call_args_list]
+        # Loop: P_1, P_2 → pause (resumed) → kill: DONE
+        assert calls == ["P_1", "P_2", "DONE"]
+
+    def test_pause_cancelled_by_stop_event(self):
+        """Stop event during pause cancels the sequence."""
+        client = make_mock_client(["P_1", "P_2"])
+        steps = [
+            {"action": "loop", "prefix": "P_", "style": "cycle", "bpm": 6000, "steps": 1, "repeats": 1},
+            {"action": "pause"},
+            {"action": "kill", "scene": "SHOULD_NOT_REACH"},
+        ]
+
+        def fake_resume_wait(timeout):
+            """Simulate cancellation arriving during pause."""
+            main.stop_event.set()
+
+        main.stop_event.clear()
+        main.resume_event.clear()
+        main.pause_resume_note = None
+
+        with patch.object(main.stop_event, "wait"), \
+             patch.object(main.resume_event, "wait", side_effect=fake_resume_wait):
+            main.run_sequence(client, steps, trigger_note=36)
+
+        calls = [c.args[0] for c in client.set_current_program_scene.call_args_list]
+        # Loop: P_1, P_2 → pause (cancelled) — kill never reached
+        assert calls == ["P_1", "P_2"]
+        assert "SHOULD_NOT_REACH" not in calls
+
+    def test_pause_uses_trigger_note_by_default(self):
+        """Pause sets pause_resume_note to the trigger note."""
+        client = make_mock_client(["P_1"])
+        steps = [
+            {"action": "pause"},
+            {"action": "stop"},
+        ]
+
+        resume_notes_seen = []
+
+        def fake_resume_wait(timeout):
+            resume_notes_seen.append(main.pause_resume_note)
+            main.resume_event.set()
+
+        main.stop_event.clear()
+        main.resume_event.clear()
+        main.pause_resume_note = None
+
+        with patch.object(main.resume_event, "wait", side_effect=fake_resume_wait):
+            main.run_sequence(client, steps, trigger_note=42)
+
+        assert resume_notes_seen[0] == 42
+        # pause_resume_note should be cleared after pause exits
+        assert main.pause_resume_note is None
+
+    def test_pause_uses_custom_resume_note(self):
+        """Pause respects a custom resume_note override."""
+        client = make_mock_client(["P_1"])
+        steps = [
+            {"action": "pause", "resume_note": 99},
+            {"action": "stop"},
+        ]
+
+        resume_notes_seen = []
+
+        def fake_resume_wait(timeout):
+            resume_notes_seen.append(main.pause_resume_note)
+            main.resume_event.set()
+
+        main.stop_event.clear()
+        main.resume_event.clear()
+        main.pause_resume_note = None
+
+        with patch.object(main.resume_event, "wait", side_effect=fake_resume_wait):
+            main.run_sequence(client, steps, trigger_note=36)
+
+        assert resume_notes_seen[0] == 99
+
 
 # ---------------------------------------------------------------------------
 # calc_tick tests

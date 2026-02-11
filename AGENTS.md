@@ -15,8 +15,9 @@ Single-file script (`main.py`) with no web server or UI. Connects to OBS via Web
 - **MIDI_MAP** — dict mapping MIDI note numbers to actions (loop, kill, stop, or sequence)
 - **Loop styles** — cycle, bounce, reverse, once, random, random_no_repeat, strobe, shuffle
 - **Timing** — BPM + steps (beats per scene switch). `calc_tick(bpm, steps)` converts to seconds: `(60 / bpm) * steps`
-- **Sequences** — ordered list of loop/kill/stop steps with per-step repeat counts; loops continuously by default
+- **Sequences** — ordered list of loop/kill/stop/pause steps with per-step repeat counts; loops continuously by default
 - **Terminal actions** — `kill` (switch to static scene and end) or `stop` (end silently) to terminate a sequence
+- **Pause** — holds the current scene until the resume note is pressed (defaults to trigger note, configurable via `resume_note`)
 - **Kill switch** — stops any running loop and switches to a static scene
 - **Config** — `config.json` (optional, gitignored) overrides `DEFAULT_MIDI_MAP` in code
 

@@ -14,6 +14,7 @@
   "48": {"action": "loop", "prefix": "LOOP_L_", "style": "cycle",  "bpm": 120, "steps": 4},
   "49": {"action": "sequence", "steps": [
     {"action": "loop", "prefix": "LOOP_A_", "style": "cycle",  "bpm": 120, "steps": 4, "repeats": 2},
+    {"action": "pause"},
     {"action": "loop", "prefix": "LOOP_B_", "style": "bounce", "bpm": 120, "steps": 2, "repeats": 3},
     {"action": "kill", "scene": "STATIC_1"}
   ]},

@@ -72,6 +72,14 @@ MIDI_DEBUG = False
 #   "kill"  – switch to a static scene and stop
 #   "stop"  – stop without changing the scene
 #
+# Pause action (hold until resumed):
+#   "pause" – hold the current scene until the resume note is pressed
+#   By default the resume note is the same MIDI note that started the sequence.
+#   Override with "resume_note":
+#     {"action": "pause"}                   – resume with the trigger note
+#     {"action": "pause", "resume_note": 42} – resume with note 42
+#   Pressing any other mapped note cancels the sequence.
+#
 # Loops forever:
 #   {"action": "sequence", "steps": [
 #       {"action": "loop", "prefix": "LOOP_A_", "style": "cycle",  "bpm": 120, "steps": 4, "repeats": 3},
@@ -90,11 +98,19 @@ MIDI_DEBUG = False
 #       {"action": "stop"}
 #   ]}
 #
+# Pauses mid-sequence, resumes when trigger note is pressed again:
+#   {"action": "sequence", "steps": [
+#       {"action": "loop", "prefix": "LOOP_A_", "style": "cycle",  "bpm": 120, "steps": 4, "repeats": 2},
+#       {"action": "pause"},
+#       {"action": "loop", "prefix": "LOOP_A_", "style": "bounce", "bpm": 120, "steps": 2, "repeats": 2}
+#   ]}
+#
 # Note numbers: C2=36 … C3=48 … (MIDI convention where C3 = 48)
 
 DEFAULT_MIDI_MAP = {
     36: {"action": "sequence", "steps": [                                                                   # C2
         {"action": "loop", "prefix": "LOOP_A_", "style": "cycle",  "bpm": 120, "steps": 4, "repeats": 3},
+        {"action": "pause"},
         {"action": "loop", "prefix": "LOOP_A_", "style": "bounce", "bpm": 120, "steps": 2, "repeats": 2},
         {"action": "stop"},
     ]},
@@ -146,7 +162,9 @@ MIDI_MAP = load_config()
 # Globals
 # ---------------------------------------------------------------------------
 
-stop_event = threading.Event()   # set() to signal the loop to stop
+stop_event = threading.Event()    # set() to signal the loop to stop
+resume_event = threading.Event()  # set() to resume from a pause
+pause_resume_note = None  # type: int | None  — MIDI note that resumes the current pause
 loop_thread = None  # type: threading.Thread | None
 
 
@@ -255,11 +273,13 @@ def start_loop(client: obs.ReqClient, prefix: str, style: str, tick: float):
 
 def stop_loop():
     """Signal the loop thread to stop and wait for it to exit."""
-    global loop_thread
+    global loop_thread, pause_resume_note
     stop_event.set()
+    resume_event.set()  # unblock any pause wait
     if loop_thread is not None:
         loop_thread.join()
         loop_thread = None
+    pause_resume_note = None
 
 
 def kill_switch(client: obs.ReqClient, scene_name: str):
@@ -272,16 +292,21 @@ def kill_switch(client: obs.ReqClient, scene_name: str):
         print(f"[kill] Failed to switch to '{scene_name}': {e}")
 
 
-def run_sequence(client: obs.ReqClient, steps: list[dict]):
-    """Run a sequence of loop/kill/stop steps, looping continuously.
+def run_sequence(client: obs.ReqClient, steps: list[dict], trigger_note: int = None):
+    """Run a sequence of loop/kill/stop/pause steps, looping continuously.
 
     The sequence repeats from the beginning after all steps complete.
-    Terminal actions (must be the last step):
-      - kill: switch to a static scene and end the sequence.
-      - stop: end the sequence without changing the scene.
+    Terminal actions (end the sequence when reached):
+      - kill: switch to a static scene and end.
+      - stop: end without changing the scene.
+    Pause action:
+      - pause: hold the current scene until the resume note is pressed.
+        Defaults to trigger_note; override with "resume_note" in the action.
     If the last step is a loop, the sequence wraps back to step 1.
     Aborts early if stop_event is set (e.g. another MIDI note pressed).
     """
+    global pause_resume_note
+
     pass_num = 0
     while not stop_event.is_set():
         pass_num += 1
@@ -290,6 +315,7 @@ def run_sequence(client: obs.ReqClient, steps: list[dict]):
         for i, step in enumerate(steps):
             if stop_event.is_set():
                 print("[seq] Cancelled.")
+                pause_resume_note = None
                 return
 
             kind = step["action"]
@@ -309,6 +335,23 @@ def run_sequence(client: obs.ReqClient, steps: list[dict]):
                 print("[seq] Sequence complete (terminal kill).")
                 return
 
+            elif kind == "pause":
+                note = step.get("resume_note", trigger_note)
+                print(f"[seq] Step {i + 1}/{len(steps)} – paused (resume_note={note})")
+                pause_resume_note = note
+                resume_event.clear()
+
+                # Wait until resumed or cancelled
+                while not stop_event.is_set() and not resume_event.is_set():
+                    resume_event.wait(0.1)
+
+                pause_resume_note = None
+
+                if stop_event.is_set():
+                    print("[seq] Cancelled during pause.")
+                    return
+                print("[seq] Resumed.")
+
             elif kind == "loop":
                 prefix = step["prefix"]
                 style = step.get("style", "cycle")
@@ -327,22 +370,31 @@ def run_sequence(client: obs.ReqClient, steps: list[dict]):
     print("[seq] Cancelled.")
 
 
-def start_sequence(client: obs.ReqClient, steps: list[dict]):
+def start_sequence(client: obs.ReqClient, steps: list[dict], trigger_note: int = None):
     """Stop any existing loop/sequence and start a new sequence."""
     global loop_thread
 
     stop_loop()
 
     stop_event.clear()
+    resume_event.clear()
     loop_thread = threading.Thread(
-        target=run_sequence, args=(client, steps), daemon=True
+        target=run_sequence, args=(client, steps, trigger_note), daemon=True
     )
     loop_thread.start()
 
 
 def handle_midi(msg, client: obs.ReqClient):
     """React to incoming MIDI messages using MIDI_MAP."""
+    global pause_resume_note
+
     if msg.type != "note_on" or msg.velocity == 0:
+        return
+
+    # If a sequence is paused and this is the resume note, resume it
+    if pause_resume_note is not None and msg.note == pause_resume_note:
+        print(f"[midi] note {msg.note} – resuming paused sequence")
+        resume_event.set()
         return
 
     entry = MIDI_MAP.get(msg.note)
@@ -365,7 +417,7 @@ def handle_midi(msg, client: obs.ReqClient):
     elif kind == "sequence":
         steps = entry["steps"]
         print(f"[midi] note {msg.note} – sequence ({len(steps)} steps)")
-        start_sequence(client, steps)
+        start_sequence(client, steps, trigger_note=msg.note)
 
 
 def midi_debug_loop(port_name: str):
