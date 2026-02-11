@@ -24,7 +24,7 @@ TICK_RATE = 2.0
 MIDI_PORT_NAME = None
 
 # Set to True to skip MIDI and immediately start the scene loop
-TEST_MODE = True
+TEST_MODE = False
 
 # ---------------------------------------------------------------------------
 # Globals
