@@ -23,6 +23,9 @@ MIDI_PORT_NAME = None
 # Set to True to skip MIDI and immediately start the first loop action
 TEST_MODE = False
 
+# Set to True to log all incoming MIDI messages and skip OBS connection
+MIDI_DEBUG = False
+
 # ---------------------------------------------------------------------------
 # MIDI Note → Action mapping
 # ---------------------------------------------------------------------------
@@ -34,9 +37,22 @@ TEST_MODE = False
 #               (using MIDI note convention where C3 = 48)
 
 MIDI_MAP = {
-    48: ("loop", "SONG_A_"),   # C3  → cycle SONG_A_ scenes
-    49: ("loop", "SONG_B_"),   # C#3 → cycle SONG_B_ scenes
-    50: ("kill", "STATIC_1"),    # D3  → stop loop, go to "static" scene
+    36: ("loop", "SONG_A_"),   # C2
+    37: ("loop", "SONG_B_"),   # C#2
+    38: ("loop", "SONG_C_"),   # D2
+    39: ("loop", "SONG_D_"),   # D#2
+    40: ("loop", "SONG_E_"),   # E2
+    41: ("loop", "SONG_F_"),   # F2
+    42: ("loop", "SONG_G_"),   # F#2
+    43: ("kill", "STATIC_1"),  # G2  → kill switch
+    44: ("loop", "SONG_H_"),   # G#2
+    45: ("loop", "SONG_I_"),   # A2
+    46: ("loop", "SONG_J_"),   # A#2
+    47: ("loop", "SONG_K_"),   # B2
+    48: ("loop", "SONG_L_"),   # C3
+    49: ("loop", "SONG_M_"),   # C#3
+    50: ("loop", "SONG_N_"),   # D3
+    51: ("kill", "STATIC_2"),  # D#3 → kill switch
 }
 
 # ---------------------------------------------------------------------------
@@ -125,7 +141,35 @@ def handle_midi(msg, client: obs.ReqClient):
         kill_switch(client, target)
 
 
+def midi_debug_loop(port_name: str):
+    """Open a MIDI port and log every incoming message."""
+    NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
+    with mido.open_input(port_name) as inport:
+        print(f"[debug] Listening on: {port_name}")
+        print("[debug] Press keys on your MIDI device … (Ctrl+C to quit)")
+        for msg in inport:
+            if hasattr(msg, "note"):
+                name = NOTE_NAMES[msg.note % 12] + str(msg.note // 12 - 1)
+                print(f"[debug] {msg}  (note_name={name})")
+            else:
+                print(f"[debug] {msg}")
+
+
 def main():
+    # --- MIDI debug mode ---
+    if MIDI_DEBUG:
+        available = mido.get_input_names()
+        print(f"[debug] Available MIDI inputs: {available}")
+        port_name = MIDI_PORT_NAME or (available[0] if available else None)
+        if port_name is None:
+            print("[error] No MIDI input ports found. Exiting.")
+            return
+        try:
+            midi_debug_loop(port_name)
+        except KeyboardInterrupt:
+            print("\n[debug] Done.")
+        return
+
     # --- Connect to OBS ---
     print(f"[obs]  Connecting to {OBS_HOST}:{OBS_PORT} …")
     client = obs.ReqClient(host=OBS_HOST, port=OBS_PORT, password=OBS_PASSWORD, timeout=5)
