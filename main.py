@@ -102,9 +102,7 @@ def load_config(path: str = CONFIG_PATH) -> dict[int, dict]:
     with open(path, "r") as f:
         raw = json.load(f)
 
-    midi_map = {}
-    for key, value in raw.items():
-        midi_map[int(key)] = value
+    midi_map = {int(k): v for k, v in raw.items()}
 
     print(f"[config] Loaded {len(midi_map)} mappings from {path}")
     return midi_map

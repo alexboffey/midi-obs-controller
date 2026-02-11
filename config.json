@@ -1,0 +1,18 @@
+{
+  "36": {"action": "loop", "prefix": "LOOP_A_", "style": "cycle",            "tick": 2.0},
+  "37": {"action": "loop", "prefix": "LOOP_A_", "style": "bounce",           "tick": 2.0},
+  "38": {"action": "loop", "prefix": "LOOP_A_", "style": "reverse",          "tick": 2.0},
+  "39": {"action": "loop", "prefix": "LOOP_A_", "style": "once",             "tick": 2.0},
+  "40": {"action": "loop", "prefix": "LOOP_A_", "style": "random",           "tick": 1.0},
+  "41": {"action": "loop", "prefix": "LOOP_A_", "style": "random_no_repeat", "tick": 1.0},
+  "42": {"action": "loop", "prefix": "LOOP_A_", "style": "strobe",           "tick": 0.5},
+  "43": {"action": "loop", "prefix": "LOOP_A_", "style": "shuffle",          "tick": 2.0},
+  "44": {"action": "loop", "prefix": "LOOP_H_", "style": "cycle",            "tick": 2.0},
+  "45": {"action": "loop", "prefix": "LOOP_I_", "style": "cycle",            "tick": 2.0},
+  "46": {"action": "loop", "prefix": "LOOP_J_", "style": "cycle",            "tick": 2.0},
+  "47": {"action": "loop", "prefix": "LOOP_K_", "style": "cycle",            "tick": 2.0},
+  "48": {"action": "loop", "prefix": "LOOP_L_", "style": "cycle",            "tick": 2.0},
+  "49": {"action": "loop", "prefix": "LOOP_M_", "style": "bounce",           "tick": 1.5},
+  "50": {"action": "loop", "prefix": "LOOP_N_", "style": "cycle",            "tick": 2.0},
+  "51": {"action": "kill", "scene": "STATIC_2"}
+}
