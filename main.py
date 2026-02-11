@@ -125,7 +125,10 @@ def kill_switch(client: obs.ReqClient, scene_name: str):
     """Stop any running loop and switch to a specific static scene."""
     stop_loop()
     print(f"[kill] Switching to static scene: {scene_name}")
-    client.set_current_program_scene(scene_name)
+    try:
+        client.set_current_program_scene(scene_name)
+    except Exception as e:
+        print(f"[kill] Failed to switch to '{scene_name}': {e}")
 
 
 def handle_midi(msg, client: obs.ReqClient):
