@@ -78,7 +78,7 @@ DEFAULT_MIDI_MAP = {
     46: {"action": "loop", "prefix": "LOOP_J_", "style": "cycle",            "tick": 2.0},  # A#2
     47: {"action": "loop", "prefix": "LOOP_K_", "style": "cycle",            "tick": 2.0},  # B2
     48: {"action": "loop", "prefix": "LOOP_L_", "style": "cycle",            "tick": 2.0},  # C3
-    49: {"action": "loop", "prefix": "LOOP_M_", "style": "bounce",           "tick": 1.5},  # C#3
+    49: {"action": "loop", "prefix": "LOOP_M_", "style": "bounce",           "tick": 6},  # C#3
     50: {"action": "loop", "prefix": "LOOP_N_", "style": "cycle",            "tick": 2.0},  # D3
     51: {"action": "kill", "scene": "STATIC_2"},                                             # D#3
 }
