@@ -114,8 +114,8 @@ MIDI_MAP = load_config()
 # Globals
 # ---------------------------------------------------------------------------
 
-looping = False
-loop_lock = threading.Lock()
+stop_event = threading.Event()   # set() to signal the loop to stop
+loop_thread = None  # type: threading.Thread | None
 
 
 def natural_sort_key(s: str):
@@ -150,16 +150,11 @@ def build_sequence(scenes: list[str], style: str) -> list[str]:
 
 
 def scene_loop(client: obs.ReqClient, sequence: list[str], tick: float, style: str):
-    """Cycle through *sequence* on a timer until `looping` is set to False."""
-    global looping
+    """Cycle through *sequence* until stop_event is set."""
     idx = 0
     last_scene = None
     print(f"[loop] Starting {style} loop – {len(sequence)} steps, tick={tick}s")
-    while True:
-        with loop_lock:
-            if not looping:
-                break
-
+    while not stop_event.is_set():
         # Pick the next scene based on style
         if style == "random":
             scene = random.choice(sequence)
@@ -179,17 +174,17 @@ def scene_loop(client: obs.ReqClient, sequence: list[str], tick: float, style: s
         client.set_current_program_scene(scene)
         last_scene = scene
         idx += 1
-        time.sleep(tick)
+        # Use wait() instead of sleep() so we can interrupt immediately
+        stop_event.wait(tick)
     print("[loop] Stopped.")
 
 
 def start_loop(client: obs.ReqClient, prefix: str, style: str, tick: float):
-    """Stop any existing loop, fetch matching scenes, start a new loop."""
-    global looping
+    """Stop any existing loop, fetch matching scenes, start a new one."""
+    global loop_thread
 
-    # Stop existing loop first
+    # Stop existing loop and wait for it to finish
     stop_loop()
-    time.sleep(tick + 0.1)  # give the old thread time to exit
 
     scenes = get_scenes_by_prefix(client, prefix)
     if not scenes:
@@ -197,19 +192,21 @@ def start_loop(client: obs.ReqClient, prefix: str, style: str, tick: float):
         return
     sequence = build_sequence(scenes, style)
     print(f"[info] Found scenes: {scenes} (style={style}, tick={tick}s)")
-    with loop_lock:
-        looping = True
-    t = threading.Thread(
+
+    stop_event.clear()
+    loop_thread = threading.Thread(
         target=scene_loop, args=(client, sequence, tick, style), daemon=True
     )
-    t.start()
+    loop_thread.start()
 
 
 def stop_loop():
-    """Signal the loop thread to stop."""
-    global looping
-    with loop_lock:
-        looping = False
+    """Signal the loop thread to stop and wait for it to exit."""
+    global loop_thread
+    stop_event.set()
+    if loop_thread is not None:
+        loop_thread.join()
+        loop_thread = None
 
 
 def kill_switch(client: obs.ReqClient, scene_name: str):

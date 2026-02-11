@@ -20,20 +20,20 @@ def run_scene_loop(sequence: list[str], style: str, ticks: int) -> list[str]:
     """Run scene_loop for a given number of ticks and return the scene names
     that were set on the mock OBS client.
 
-    We patch time.sleep to count iterations and flip `looping` to False
+    We patch stop_event.wait to count iterations and signal stop
     after *ticks* iterations so the loop exits cleanly.
     """
     client = MagicMock()
     call_count = 0
 
-    def fake_sleep(_duration):
+    def fake_wait(_duration):
         nonlocal call_count
         call_count += 1
         if call_count >= ticks:
-            main.looping = False
+            main.stop_event.set()
 
-    with patch.object(main.time, "sleep", side_effect=fake_sleep):
-        main.looping = True
+    main.stop_event.clear()
+    with patch.object(main.stop_event, "wait", side_effect=fake_wait):
         main.scene_loop(client, sequence, tick=0.1, style=style)
 
     return [c.args[0] for c in client.set_current_program_scene.call_args_list]
@@ -187,10 +187,10 @@ class TestKillSwitch:
 
     def test_kill_switch_sets_scene(self):
         client = MagicMock()
-        main.looping = True
+        main.stop_event.clear()
         main.kill_switch(client, "STATIC_1")
         client.set_current_program_scene.assert_called_once_with("STATIC_1")
-        assert main.looping is False
+        assert main.stop_event.is_set()
 
     def test_kill_switch_handles_missing_scene(self):
         client = MagicMock()
