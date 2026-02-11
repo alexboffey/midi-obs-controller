@@ -37,21 +37,21 @@ MIDI_DEBUG = False
 #               (using MIDI note convention where C3 = 48)
 
 MIDI_MAP = {
-    36: ("loop", "SONG_A_"),   # C2
-    37: ("loop", "SONG_B_"),   # C#2
-    38: ("loop", "SONG_C_"),   # D2
-    39: ("loop", "SONG_D_"),   # D#2
-    40: ("loop", "SONG_E_"),   # E2
-    41: ("loop", "SONG_F_"),   # F2
-    42: ("loop", "SONG_G_"),   # F#2
+    36: ("loop", "LOOP_A_"),   # C2
+    37: ("loop", "LOOP_B_"),   # C#2
+    38: ("loop", "LOOP_C_"),   # D2
+    39: ("loop", "LOOP_D_"),   # D#2
+    40: ("loop", "LOOP_E_"),   # E2
+    41: ("loop", "LOOP_F_"),   # F2
+    42: ("loop", "LOOP_G_"),   # F#2
     43: ("kill", "STATIC_1"),  # G2  → kill switch
-    44: ("loop", "SONG_H_"),   # G#2
-    45: ("loop", "SONG_I_"),   # A2
-    46: ("loop", "SONG_J_"),   # A#2
-    47: ("loop", "SONG_K_"),   # B2
-    48: ("loop", "SONG_L_"),   # C3
-    49: ("loop", "SONG_M_"),   # C#3
-    50: ("loop", "SONG_N_"),   # D3
+    44: ("loop", "LOOP_H_"),   # G#2
+    45: ("loop", "LOOP_I_"),   # A2
+    46: ("loop", "LOOP_J_"),   # A#2
+    47: ("loop", "LOOP_K_"),   # B2
+    48: ("loop", "LOOP_L_"),   # C3
+    49: ("loop", "LOOP_M_"),   # C#3
+    50: ("loop", "LOOP_N_"),   # D3
     51: ("kill", "STATIC_2"),  # D#3 → kill switch
 }
 
