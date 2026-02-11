@@ -15,9 +15,6 @@ OBS_HOST = "localhost"
 OBS_PORT = 4455
 OBS_PASSWORD = "HrCDuVNv7Sfxdxzi"
 
-# Seconds between each scene switch (lower = faster looping)
-TICK_RATE = 2.0
-
 # Set to a specific port name, or None to pick the first available input
 MIDI_PORT_NAME = None
 
@@ -30,30 +27,38 @@ MIDI_DEBUG = False
 # ---------------------------------------------------------------------------
 # MIDI Note → Action mapping
 # ---------------------------------------------------------------------------
-# Each entry maps a MIDI note number to an action:
-#   ("loop", "PREFIX_")   – stop any current loop, start cycling PREFIX_ scenes
-#   ("kill", "SceneName") – stop any current loop, switch to a static scene
+# Each entry maps a MIDI note number to an action dict:
 #
-# Note numbers: C3=48, C#3=49, D3=50, D#3=51, E3=52, F3=53 ...
-#               (using MIDI note convention where C3 = 48)
+# Loop actions (cycle through scenes matching a prefix):
+#   {"action": "loop", "prefix": "LOOP_A_", "style": "cycle", "tick": 2.0}
+#   {"action": "loop", "prefix": "LOOP_A_", "style": "bounce", "tick": 1.5}
+#
+# Kill actions (stop loop, switch to a static scene):
+#   {"action": "kill", "scene": "STATIC_1"}
+#
+# Loop styles:
+#   "cycle"  – 1,2,3,1,2,3,1,2,3 …
+#   "bounce" – 1,2,3,2,1,2,3,2,1 …
+#
+# Note numbers: C2=36 … C3=48 … (MIDI convention where C3 = 48)
 
 MIDI_MAP = {
-    36: ("loop", "LOOP_A_"),   # C2
-    37: ("loop", "LOOP_B_"),   # C#2
-    38: ("loop", "LOOP_C_"),   # D2
-    39: ("loop", "LOOP_D_"),   # D#2
-    40: ("loop", "LOOP_E_"),   # E2
-    41: ("loop", "LOOP_F_"),   # F2
-    42: ("loop", "LOOP_G_"),   # F#2
-    43: ("kill", "STATIC_1"),  # G2  → kill switch
-    44: ("loop", "LOOP_H_"),   # G#2
-    45: ("loop", "LOOP_I_"),   # A2
-    46: ("loop", "LOOP_J_"),   # A#2
-    47: ("loop", "LOOP_K_"),   # B2
-    48: ("loop", "LOOP_L_"),   # C3
-    49: ("loop", "LOOP_M_"),   # C#3
-    50: ("loop", "LOOP_N_"),   # D3
-    51: ("kill", "STATIC_2"),  # D#3 → kill switch
+    36: {"action": "loop", "prefix": "LOOP_A_", "style": "cycle",  "tick": 2.0},  # C2
+    37: {"action": "loop", "prefix": "LOOP_B_", "style": "cycle",  "tick": 2.0},  # C#2
+    38: {"action": "loop", "prefix": "LOOP_C_", "style": "cycle",  "tick": 2.0},  # D2
+    39: {"action": "loop", "prefix": "LOOP_D_", "style": "cycle",  "tick": 2.0},  # D#2
+    40: {"action": "loop", "prefix": "LOOP_E_", "style": "cycle",  "tick": 2.0},  # E2
+    41: {"action": "loop", "prefix": "LOOP_F_", "style": "cycle",  "tick": 2.0},  # F2
+    42: {"action": "loop", "prefix": "LOOP_G_", "style": "bounce", "tick": 2.0},  # F#2
+    43: {"action": "kill", "scene": "STATIC_1"},                                   # G2
+    44: {"action": "loop", "prefix": "LOOP_H_", "style": "cycle",  "tick": 2.0},  # G#2
+    45: {"action": "loop", "prefix": "LOOP_I_", "style": "cycle",  "tick": 2.0},  # A2
+    46: {"action": "loop", "prefix": "LOOP_J_", "style": "cycle",  "tick": 2.0},  # A#2
+    47: {"action": "loop", "prefix": "LOOP_K_", "style": "cycle",  "tick": 2.0},  # B2
+    48: {"action": "loop", "prefix": "LOOP_L_", "style": "cycle",  "tick": 2.0},  # C3
+    49: {"action": "loop", "prefix": "LOOP_M_", "style": "bounce", "tick": 1.5},  # C#3
+    50: {"action": "loop", "prefix": "LOOP_N_", "style": "cycle",  "tick": 2.0},  # D3
+    51: {"action": "kill", "scene": "STATIC_2"},                                   # D#3
 }
 
 # ---------------------------------------------------------------------------
@@ -78,16 +83,25 @@ def get_scenes_by_prefix(client: obs.ReqClient, prefix: str) -> list[str]:
     )
 
 
-def scene_loop(client: obs.ReqClient, scenes: list[str], tick: float):
-    """Cycle through *scenes* on a timer until `looping` is set to False."""
+def build_sequence(scenes: list[str], style: str) -> list[str]:
+    """Build the playback sequence from a list of scenes and a loop style."""
+    if style == "bounce" and len(scenes) > 2:
+        # 1,2,3,2,1,2,3,2,1 …
+        return scenes + scenes[-2:0:-1]
+    # "cycle" (default): 1,2,3,1,2,3 …
+    return scenes
+
+
+def scene_loop(client: obs.ReqClient, sequence: list[str], tick: float, style: str):
+    """Cycle through *sequence* on a timer until `looping` is set to False."""
     global looping
     idx = 0
-    print(f"[loop] Starting scene loop – {len(scenes)} scenes, tick={tick}s")
+    print(f"[loop] Starting {style} loop – {len(sequence)} steps, tick={tick}s")
     while True:
         with loop_lock:
             if not looping:
                 break
-        scene = scenes[idx % len(scenes)]
+        scene = sequence[idx % len(sequence)]
         print(f"[loop] -> {scene}")
         client.set_current_program_scene(scene)
         idx += 1
@@ -95,7 +109,7 @@ def scene_loop(client: obs.ReqClient, scenes: list[str], tick: float):
     print("[loop] Stopped.")
 
 
-def start_loop(client: obs.ReqClient, prefix: str, tick: float):
+def start_loop(client: obs.ReqClient, prefix: str, style: str, tick: float):
     """Stop any existing loop, fetch matching scenes, start a new loop."""
     global looping
 
@@ -107,10 +121,13 @@ def start_loop(client: obs.ReqClient, prefix: str, tick: float):
     if not scenes:
         print(f"[warn] No scenes found with prefix '{prefix}'")
         return
-    print(f"[info] Found scenes: {scenes}")
+    sequence = build_sequence(scenes, style)
+    print(f"[info] Found scenes: {scenes} (style={style}, tick={tick}s)")
     with loop_lock:
         looping = True
-    t = threading.Thread(target=scene_loop, args=(client, scenes, tick), daemon=True)
+    t = threading.Thread(
+        target=scene_loop, args=(client, sequence, tick, style), daemon=True
+    )
     t.start()
 
 
@@ -136,19 +153,23 @@ def handle_midi(msg, client: obs.ReqClient):
     if msg.type != "note_on" or msg.velocity == 0:
         return
 
-    action = MIDI_MAP.get(msg.note)
-    if action is None:
+    entry = MIDI_MAP.get(msg.note)
+    if entry is None:
         print(f"[midi] note {msg.note} – unmapped, ignoring")
         return
 
-    kind, target = action
+    kind = entry["action"]
 
     if kind == "loop":
-        print(f"[midi] note {msg.note} – starting loop (prefix={target})")
-        start_loop(client, target, TICK_RATE)
+        prefix = entry["prefix"]
+        style = entry.get("style", "cycle")
+        tick = entry.get("tick", 2.0)
+        print(f"[midi] note {msg.note} – {style} loop (prefix={prefix}, tick={tick}s)")
+        start_loop(client, prefix, style, tick)
     elif kind == "kill":
-        print(f"[midi] note {msg.note} – kill switch (scene={target})")
-        kill_switch(client, target)
+        scene = entry["scene"]
+        print(f"[midi] note {msg.note} – kill switch (scene={scene})")
+        kill_switch(client, scene)
 
 
 def midi_debug_loop(port_name: str):
@@ -188,10 +209,10 @@ def main():
 
     if TEST_MODE:
         # Skip MIDI – run the first "loop" action from MIDI_MAP
-        first_loop = next((t for k, t in MIDI_MAP.values() if k == "loop"), None)
-        if first_loop:
-            print(f"[test] TEST_MODE – starting loop (prefix={first_loop})")
-            start_loop(client, first_loop, TICK_RATE)
+        first = next((e for e in MIDI_MAP.values() if e["action"] == "loop"), None)
+        if first:
+            print(f"[test] TEST_MODE – starting loop (prefix={first['prefix']})")
+            start_loop(client, first["prefix"], first.get("style", "cycle"), first.get("tick", 2.0))
         try:
             while True:
                 time.sleep(0.5)
