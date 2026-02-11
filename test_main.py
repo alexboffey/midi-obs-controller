@@ -350,23 +350,17 @@ class TestRunSequence:
         steps = [
             {"action": "loop", "prefix": "P_", "style": "cycle", "bpm": 6000, "steps": 1, "repeats": 1},
             {"action": "loop", "prefix": "P_", "style": "reverse", "bpm": 6000, "steps": 1, "repeats": 1},
+            {"action": "stop"},
         ]
-        call_count = 0
-
-        def fake_wait(_duration):
-            nonlocal call_count
-            call_count += 1
-            # Step 1: 3 scenes, Step 2 (last, infinite): stop after 3 more
-            if call_count >= 6:
-                main.stop_event.set()
 
         main.stop_event.clear()
-        with patch.object(main.stop_event, "wait", side_effect=fake_wait):
+        with patch.object(main.stop_event, "wait"):
             main.run_sequence(client, steps)
 
         calls = [c.args[0] for c in client.set_current_program_scene.call_args_list]
         # Step 1: cycle 1 repeat = P_1, P_2, P_3
-        # Step 2: reverse (last, runs indefinitely) = P_3, P_2, P_1
+        # Step 2: reverse 1 repeat = P_3, P_2, P_1
+        # Step 3: stop
         assert calls == ["P_1", "P_2", "P_3", "P_3", "P_2", "P_1"]
 
     def test_sequence_with_kill_step(self):
@@ -423,18 +417,19 @@ class TestRunSequence:
         assert len(calls) == 2
         assert "SHOULD_NOT_REACH" not in calls
 
-    def test_sequence_last_loop_runs_indefinitely(self):
+    def test_sequence_loops_continuously(self):
+        """Without a terminal action, sequence wraps back to step 1."""
         client = make_mock_client(["P_1", "P_2"])
         steps = [
-            {"action": "loop", "prefix": "P_", "style": "cycle", "bpm": 6000, "steps": 1, "repeats": 3},
+            {"action": "loop", "prefix": "P_", "style": "cycle", "bpm": 6000, "steps": 1, "repeats": 1},
         ]
         call_count = 0
 
         def fake_wait(_duration):
             nonlocal call_count
             call_count += 1
-            # Let it run for 10 ticks then stop
-            if call_count >= 10:
+            # Let it loop through 2 full passes (2 scenes each) then stop
+            if call_count >= 4:
                 main.stop_event.set()
 
         main.stop_event.clear()
@@ -442,8 +437,24 @@ class TestRunSequence:
             main.run_sequence(client, steps)
 
         calls = [c.args[0] for c in client.set_current_program_scene.call_args_list]
-        # Last step ignores repeats, should have played 10 scenes
-        assert len(calls) == 10
+        # Pass 1: P_1, P_2 — Pass 2: P_1, P_2
+        assert calls == ["P_1", "P_2", "P_1", "P_2"]
+
+    def test_stop_action_terminates_sequence(self):
+        """Stop action ends the sequence without switching scenes."""
+        client = make_mock_client(["P_1", "P_2"])
+        steps = [
+            {"action": "loop", "prefix": "P_", "style": "cycle", "bpm": 6000, "steps": 1, "repeats": 1},
+            {"action": "stop"},
+        ]
+
+        main.stop_event.clear()
+        with patch.object(main.stop_event, "wait"):
+            main.run_sequence(client, steps)
+
+        calls = [c.args[0] for c in client.set_current_program_scene.call_args_list]
+        # Loop plays P_1, P_2 then stop — no extra scene switch
+        assert calls == ["P_1", "P_2"]
 
     def test_sequence_multiple_repeats_then_next_step(self):
         """Non-last loop steps respect their repeats count before advancing."""

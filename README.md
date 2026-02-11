@@ -93,7 +93,15 @@ If you prefer not to use a separate file, edit the `DEFAULT_MIDI_MAP` dict direc
 {"action": "kill", "scene": "STATIC_1"}
 ```
 
-**Sequence** — run a series of loop/kill steps in order:
+**Stop** — end a sequence without changing the scene:
+
+```json
+{"action": "stop"}
+```
+
+**Sequence** — run a series of loop/kill/stop steps in order:
+
+Sequences loop continuously by default. After the last step, the sequence wraps back to step 1. Use a terminal action (`kill` or `stop`) as the last step to end the sequence instead.
 
 ```json
 {
@@ -106,9 +114,10 @@ If you prefer not to use a separate file, edit the `DEFAULT_MIDI_MAP` dict direc
 }
 ```
 
-- `repeats` controls how many full cycles a step runs before advancing to the next step
-- The last loop step in a sequence runs indefinitely until cancelled
-- Kill steps switch scene immediately and advance to the next step
+- `repeats` controls how many full cycles a step runs before advancing to the next step (default: 1)
+- Sequences loop continuously — omit a terminal action to repeat forever
+- `kill` as the last step ends the sequence and switches to a static scene
+- `stop` as the last step ends the sequence silently (holds the last scene)
 - Pressing any other mapped MIDI note cancels the running sequence
 
 ## Loop Styles

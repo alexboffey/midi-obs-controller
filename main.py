@@ -64,13 +64,30 @@ MIDI_DEBUG = False
 #   {"action": "loop", "prefix": "LOOP_A_", "style": "shuffle", "bpm": 120, "steps": 4}
 #
 # --- Sequence action (run a series of steps in order) ---
-# Each step is a loop or kill action with an optional "repeats" field.
-# "repeats" = number of full cycles before advancing to the next step.
-# The last loop step runs indefinitely until cancelled.
+# Sequences loop continuously by default. Each loop step uses its
+# "repeats" count (default 1) before advancing to the next step.
+# After the last step, the sequence wraps back to step 1.
+#
+# Terminal actions (end the sequence when reached):
+#   "kill"  – switch to a static scene and stop
+#   "stop"  – stop without changing the scene
+#
+# Loops forever:
 #   {"action": "sequence", "steps": [
 #       {"action": "loop", "prefix": "LOOP_A_", "style": "cycle",  "bpm": 120, "steps": 4, "repeats": 3},
-#       {"action": "loop", "prefix": "LOOP_A_", "style": "bounce", "bpm": 120, "steps": 2, "repeats": 2},
+#       {"action": "loop", "prefix": "LOOP_A_", "style": "bounce", "bpm": 120, "steps": 2, "repeats": 2}
+#   ]}
+#
+# Ends on a static scene:
+#   {"action": "sequence", "steps": [
+#       {"action": "loop", "prefix": "LOOP_A_", "style": "cycle",  "bpm": 120, "steps": 4, "repeats": 3},
 #       {"action": "kill", "scene": "STATIC_1"}
+#   ]}
+#
+# Ends silently (holds last scene):
+#   {"action": "sequence", "steps": [
+#       {"action": "loop", "prefix": "LOOP_A_", "style": "cycle",  "bpm": 120, "steps": 4, "repeats": 3},
+#       {"action": "stop"}
 #   ]}
 #
 # Note numbers: C2=36 … C3=48 … (MIDI convention where C3 = 48)
@@ -79,7 +96,7 @@ DEFAULT_MIDI_MAP = {
     36: {"action": "sequence", "steps": [                                                                   # C2
         {"action": "loop", "prefix": "LOOP_A_", "style": "cycle",  "bpm": 120, "steps": 4, "repeats": 3},
         {"action": "loop", "prefix": "LOOP_A_", "style": "bounce", "bpm": 120, "steps": 2, "repeats": 2},
-        {"action": "kill", "scene": "STATIC_1"},
+        {"action": "stop"},
     ]},
     37: {"action": "loop", "prefix": "LOOP_A_", "style": "bounce",           "bpm": 120, "steps": 4},  # C#2
     38: {"action": "loop", "prefix": "LOOP_A_", "style": "reverse",          "bpm": 120, "steps": 4},  # D2
@@ -256,44 +273,58 @@ def kill_switch(client: obs.ReqClient, scene_name: str):
 
 
 def run_sequence(client: obs.ReqClient, steps: list[dict]):
-    """Run a sequence of loop/kill steps in order.
+    """Run a sequence of loop/kill/stop steps, looping continuously.
 
-    Each step is a standard action dict with an optional "repeats" field.
-    The last loop step runs indefinitely (until cancelled).
+    The sequence repeats from the beginning after all steps complete.
+    Terminal actions (must be the last step):
+      - kill: switch to a static scene and end the sequence.
+      - stop: end the sequence without changing the scene.
+    If the last step is a loop, the sequence wraps back to step 1.
     Aborts early if stop_event is set (e.g. another MIDI note pressed).
     """
-    for i, step in enumerate(steps):
-        if stop_event.is_set():
-            print("[seq] Cancelled.")
-            return
+    pass_num = 0
+    while not stop_event.is_set():
+        pass_num += 1
+        print(f"[seq] Pass {pass_num}")
 
-        kind = step["action"]
-        is_last = (i == len(steps) - 1)
+        for i, step in enumerate(steps):
+            if stop_event.is_set():
+                print("[seq] Cancelled.")
+                return
 
-        if kind == "kill":
-            scene = step["scene"]
-            print(f"[seq] Step {i + 1}/{len(steps)} – kill (scene={scene})")
-            try:
-                client.set_current_program_scene(scene)
-            except Exception as e:
-                print(f"[seq] Failed to switch to '{scene}': {e}")
+            kind = step["action"]
 
-        elif kind == "loop":
-            prefix = step["prefix"]
-            style = step.get("style", "cycle")
-            tick = calc_tick(step["bpm"], step["steps"])
-            repeats = None if is_last else step.get("repeats", 1)
+            if kind == "stop":
+                print(f"[seq] Step {i + 1}/{len(steps)} – stop")
+                print("[seq] Sequence complete (terminal stop).")
+                return
 
-            scenes = get_scenes_by_prefix(client, prefix)
-            if not scenes:
-                print(f"[seq] Step {i + 1}/{len(steps)} – no scenes for '{prefix}', skipping")
-                continue
+            elif kind == "kill":
+                scene = step["scene"]
+                print(f"[seq] Step {i + 1}/{len(steps)} – kill (scene={scene})")
+                try:
+                    client.set_current_program_scene(scene)
+                except Exception as e:
+                    print(f"[seq] Failed to switch to '{scene}': {e}")
+                print("[seq] Sequence complete (terminal kill).")
+                return
 
-            sequence = build_sequence(scenes, style)
-            print(f"[seq] Step {i + 1}/{len(steps)} – {style} loop (prefix={prefix}, tick={tick:.3f}s, repeats={repeats})")
-            scene_loop(client, sequence, tick, style, max_repeats=repeats)
+            elif kind == "loop":
+                prefix = step["prefix"]
+                style = step.get("style", "cycle")
+                tick = calc_tick(step["bpm"], step["steps"])
+                repeats = step.get("repeats", 1)
 
-    print("[seq] Sequence complete.")
+                scenes = get_scenes_by_prefix(client, prefix)
+                if not scenes:
+                    print(f"[seq] Step {i + 1}/{len(steps)} – no scenes for '{prefix}', skipping")
+                    continue
+
+                sequence = build_sequence(scenes, style)
+                print(f"[seq] Step {i + 1}/{len(steps)} – {style} loop (prefix={prefix}, tick={tick:.3f}s, repeats={repeats})")
+                scene_loop(client, sequence, tick, style, max_repeats=repeats)
+
+    print("[seq] Cancelled.")
 
 
 def start_sequence(client: obs.ReqClient, steps: list[dict]):
