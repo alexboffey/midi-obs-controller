@@ -1,3 +1,4 @@
+import random
 import re
 import time
 import threading
@@ -27,18 +28,37 @@ MIDI_DEBUG = False
 # ---------------------------------------------------------------------------
 # MIDI Note → Action mapping
 # ---------------------------------------------------------------------------
-# Each entry maps a MIDI note number to an action dict:
+# Each entry maps a MIDI note number to an action dict.
 #
-# Loop actions (cycle through scenes matching a prefix):
-#   {"action": "loop", "prefix": "LOOP_A_", "style": "cycle", "tick": 2.0}
-#   {"action": "loop", "prefix": "LOOP_A_", "style": "bounce", "tick": 1.5}
-#
-# Kill actions (stop loop, switch to a static scene):
+# --- Kill action (stop loop, switch to a static scene) ---
 #   {"action": "kill", "scene": "STATIC_1"}
 #
-# Loop styles:
-#   "cycle"  – 1,2,3,1,2,3,1,2,3 …
-#   "bounce" – 1,2,3,2,1,2,3,2,1 …
+# --- Loop actions (cycle through scenes matching a prefix) ---
+# Each loop action requires: action, prefix, style, tick
+#
+# "cycle" – loops forward: 1,2,3,1,2,3 …
+#   {"action": "loop", "prefix": "LOOP_A_", "style": "cycle", "tick": 2.0}
+#
+# "bounce" – ping-pong: 1,2,3,2,1,2,3,2,1 …
+#   {"action": "loop", "prefix": "LOOP_A_", "style": "bounce", "tick": 2.0}
+#
+# "reverse" – loops backward: 3,2,1,3,2,1 …
+#   {"action": "loop", "prefix": "LOOP_A_", "style": "reverse", "tick": 2.0}
+#
+# "once" – plays forward then holds on last scene: 1,2,3 → stop
+#   {"action": "loop", "prefix": "LOOP_A_", "style": "once", "tick": 2.0}
+#
+# "random" – picks a random scene each tick
+#   {"action": "loop", "prefix": "LOOP_A_", "style": "random", "tick": 0.5}
+#
+# "random_no_repeat" – random, but never the same scene twice in a row
+#   {"action": "loop", "prefix": "LOOP_A_", "style": "random_no_repeat", "tick": 0.5}
+#
+# "strobe" – alternates between first and last scene
+#   {"action": "loop", "prefix": "LOOP_A_", "style": "strobe", "tick": 0.25}
+#
+# "shuffle" – randomizes scene order once, then cycles that order
+#   {"action": "loop", "prefix": "LOOP_A_", "style": "shuffle", "tick": 2.0}
 #
 # Note numbers: C2=36 … C3=48 … (MIDI convention where C3 = 48)
 
@@ -86,24 +106,49 @@ def get_scenes_by_prefix(client: obs.ReqClient, prefix: str) -> list[str]:
 def build_sequence(scenes: list[str], style: str) -> list[str]:
     """Build the playback sequence from a list of scenes and a loop style."""
     if style == "bounce" and len(scenes) > 2:
-        # 1,2,3,2,1,2,3,2,1 …
         return scenes + scenes[-2:0:-1]
-    # "cycle" (default): 1,2,3,1,2,3 …
-    return scenes
+    if style == "reverse":
+        return list(reversed(scenes))
+    if style == "strobe" and len(scenes) >= 2:
+        return [scenes[0], scenes[-1]]
+    if style == "shuffle":
+        shuffled = list(scenes)
+        random.shuffle(shuffled)
+        return shuffled
+    # "cycle", "random", "random_no_repeat", "once" use scenes as-is
+    # (their special behaviour is handled in scene_loop)
+    return list(scenes)
 
 
 def scene_loop(client: obs.ReqClient, sequence: list[str], tick: float, style: str):
     """Cycle through *sequence* on a timer until `looping` is set to False."""
     global looping
     idx = 0
+    last_scene = None
     print(f"[loop] Starting {style} loop – {len(sequence)} steps, tick={tick}s")
     while True:
         with loop_lock:
             if not looping:
                 break
-        scene = sequence[idx % len(sequence)]
+
+        # Pick the next scene based on style
+        if style == "random":
+            scene = random.choice(sequence)
+        elif style == "random_no_repeat":
+            choices = [s for s in sequence if s != last_scene] or sequence
+            scene = random.choice(choices)
+        elif style == "once":
+            if idx >= len(sequence):
+                print(f"[loop] Finished (once) – holding on {last_scene}")
+                break
+            scene = sequence[idx]
+        else:
+            # cycle, bounce, reverse, strobe, shuffle all just wrap around
+            scene = sequence[idx % len(sequence)]
+
         print(f"[loop] -> {scene}")
         client.set_current_program_scene(scene)
+        last_scene = scene
         idx += 1
         time.sleep(tick)
     print("[loop] Stopped.")
