@@ -14,17 +14,30 @@ OBS_HOST = "localhost"
 OBS_PORT = 4455
 OBS_PASSWORD = "HrCDuVNv7Sfxdxzi"
 
-# Scene prefix to filter on (only scenes starting with this are cycled)
-SCENE_PREFIX = "SONG_A_"
-
 # Seconds between each scene switch (lower = faster looping)
 TICK_RATE = 2.0
 
 # Set to a specific port name, or None to pick the first available input
 MIDI_PORT_NAME = None
 
-# Set to True to skip MIDI and immediately start the scene loop
+# Set to True to skip MIDI and immediately start the first loop action
 TEST_MODE = False
+
+# ---------------------------------------------------------------------------
+# MIDI Note → Action mapping
+# ---------------------------------------------------------------------------
+# Each entry maps a MIDI note number to an action:
+#   ("loop", "PREFIX_")   – stop any current loop, start cycling PREFIX_ scenes
+#   ("kill", "SceneName") – stop any current loop, switch to a static scene
+#
+# Note numbers: C3=48, C#3=49, D3=50, D#3=51, E3=52, F3=53 ...
+#               (using MIDI note convention where C3 = 48)
+
+MIDI_MAP = {
+    48: ("loop", "SONG_A_"),   # C3  → cycle SONG_A_ scenes
+    49: ("loop", "SONG_B_"),   # C#3 → cycle SONG_B_ scenes
+    50: ("kill", "STATIC_1"),    # D3  → stop loop, go to "static" scene
+}
 
 # ---------------------------------------------------------------------------
 # Globals
@@ -37,7 +50,9 @@ loop_lock = threading.Lock()
 def get_scenes_by_prefix(client: obs.ReqClient, prefix: str) -> list[str]:
     """Return scene names that start with *prefix*, sorted alphabetically."""
     resp = client.get_scene_list()
-    return sorted(s["sceneName"] for s in resp.scenes if s["sceneName"].startswith(prefix))
+    return sorted(
+        s["sceneName"] for s in resp.scenes if s["sceneName"].startswith(prefix)
+    )
 
 
 def scene_loop(client: obs.ReqClient, scenes: list[str], tick: float):
@@ -58,8 +73,13 @@ def scene_loop(client: obs.ReqClient, scenes: list[str], tick: float):
 
 
 def start_loop(client: obs.ReqClient, prefix: str, tick: float):
-    """Fetch matching scenes and kick off the loop in a background thread."""
+    """Stop any existing loop, fetch matching scenes, start a new loop."""
     global looping
+
+    # Stop existing loop first
+    stop_loop()
+    time.sleep(tick + 0.1)  # give the old thread time to exit
+
     scenes = get_scenes_by_prefix(client, prefix)
     if not scenes:
         print(f"[warn] No scenes found with prefix '{prefix}'")
@@ -78,25 +98,31 @@ def stop_loop():
         looping = False
 
 
-def handle_midi(msg, client: obs.ReqClient):
-    """React to incoming MIDI messages."""
-    global looping
+def kill_switch(client: obs.ReqClient, scene_name: str):
+    """Stop any running loop and switch to a specific static scene."""
+    stop_loop()
+    print(f"[kill] Switching to static scene: {scene_name}")
+    client.set_current_program_scene(scene_name)
 
-    # Ignore non-note messages
-    if msg.type not in ("note_on", "note_off"):
+
+def handle_midi(msg, client: obs.ReqClient):
+    """React to incoming MIDI messages using MIDI_MAP."""
+    if msg.type != "note_on" or msg.velocity == 0:
         return
 
-    # note_on with velocity > 0  -> toggle the scene loop
-    if msg.type == "note_on" and msg.velocity > 0:
-        with loop_lock:
-            currently_looping = looping
+    action = MIDI_MAP.get(msg.note)
+    if action is None:
+        print(f"[midi] note {msg.note} – unmapped, ignoring")
+        return
 
-        if currently_looping:
-            print(f"[midi] note {msg.note} – stopping loop")
-            stop_loop()
-        else:
-            print(f"[midi] note {msg.note} – starting loop (prefix={SCENE_PREFIX})")
-            start_loop(client, SCENE_PREFIX, TICK_RATE)
+    kind, target = action
+
+    if kind == "loop":
+        print(f"[midi] note {msg.note} – starting loop (prefix={target})")
+        start_loop(client, target, TICK_RATE)
+    elif kind == "kill":
+        print(f"[midi] note {msg.note} – kill switch (scene={target})")
+        kill_switch(client, target)
 
 
 def main():
@@ -107,9 +133,11 @@ def main():
     print(f"[obs]  Connected – OBS {resp.obs_version}, WebSocket {resp.obs_web_socket_version}")
 
     if TEST_MODE:
-        # Skip MIDI – just start the loop and wait
-        print("[test] TEST_MODE enabled – starting loop immediately")
-        start_loop(client, SCENE_PREFIX, TICK_RATE)
+        # Skip MIDI – run the first "loop" action from MIDI_MAP
+        first_loop = next((t for k, t in MIDI_MAP.values() if k == "loop"), None)
+        if first_loop:
+            print(f"[test] TEST_MODE – starting loop (prefix={first_loop})")
+            start_loop(client, first_loop, TICK_RATE)
         try:
             while True:
                 time.sleep(0.5)
@@ -128,6 +156,7 @@ def main():
         return
 
     print(f"[midi] Opening port: {port_name}")
+    print(f"[midi] Mapped notes: {list(MIDI_MAP.keys())}")
     with mido.open_input(port_name) as inport:
         print("[midi] Listening for MIDI events … (press Ctrl+C to quit)")
         try:
