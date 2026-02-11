@@ -14,7 +14,7 @@ build/
 .idea/
 
 # User config (use config.example.json as a template)
-# config.json
+config.json
 
 # OS
 .DS_Store
