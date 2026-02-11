@@ -1,3 +1,4 @@
+import re
 import time
 import threading
 
@@ -63,11 +64,17 @@ looping = False
 loop_lock = threading.Lock()
 
 
+def natural_sort_key(s: str):
+    """Sort key that handles embedded numbers naturally (e.g. 2 before 10)."""
+    return [int(c) if c.isdigit() else c.lower() for c in re.split(r"(\d+)", s)]
+
+
 def get_scenes_by_prefix(client: obs.ReqClient, prefix: str) -> list[str]:
-    """Return scene names that start with *prefix*, sorted alphabetically."""
+    """Return scene names that start with *prefix*, natural-sorted."""
     resp = client.get_scene_list()
     return sorted(
-        s["sceneName"] for s in resp.scenes if s["sceneName"].startswith(prefix)
+        (s["sceneName"] for s in resp.scenes if s["sceneName"].startswith(prefix)),
+        key=natural_sort_key,
     )
 
 
