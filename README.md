@@ -41,16 +41,73 @@ Edit the variables at the top of `main.py`:
 | `OBS_HOST` | `localhost` | OBS WebSocket host |
 | `OBS_PORT` | `4455` | OBS WebSocket port |
 | `OBS_PASSWORD` | `""` | OBS WebSocket password |
-| `TICK_RATE` | `2.0` | Seconds between scene switches |
 | `MIDI_PORT_NAME` | `None` | MIDI input port (None = first available) |
 | `MIDI_MAP` | see code | Maps MIDI note numbers to loop/kill actions |
 | `TEST_MODE` | `False` | Skip MIDI, immediately start first loop |
 | `MIDI_DEBUG` | `False` | Log all MIDI input, skip OBS connection |
 
+## MIDI Map
+
+The MIDI map controls which note triggers which action. You can configure it in two ways:
+
+### Option 1: `config.json` (recommended)
+
+Copy the example file and edit it:
+
+```bash
+cp config.example.json config.json
+```
+
+The JSON file maps MIDI note numbers (as strings) to action objects:
+
+```json
+{
+  "48": {"action": "loop", "prefix": "LOOP_A_", "style": "cycle", "tick": 2.0},
+  "43": {"action": "kill", "scene": "STATIC_1"}
+}
+```
+
+The script loads `config.json` on startup. If the file doesn't exist, it falls back to the hardcoded default in `main.py`.
+
+> `config.json` is gitignored so your personal config won't be committed.
+
+### Option 2: Edit `DEFAULT_MIDI_MAP` in `main.py`
+
+If you prefer not to use a separate file, edit the `DEFAULT_MIDI_MAP` dict directly in the code. This is used as the fallback when no `config.json` is present.
+
+### Action types
+
+**Loop** — cycle through all OBS scenes matching a prefix:
+
+```json
+{"action": "loop", "prefix": "LOOP_A_", "style": "cycle", "tick": 2.0}
+```
+
+**Kill** — stop any running loop and switch to a static scene:
+
+```json
+{"action": "kill", "scene": "STATIC_1"}
+```
+
+## Loop Styles
+
+| Style | Behaviour |
+|---|---|
+| `cycle` | Forward loop: 1, 2, 3, 1, 2, 3 … |
+| `bounce` | Ping-pong: 1, 2, 3, 2, 1, 2, 3 … |
+| `reverse` | Backward loop: 3, 2, 1, 3, 2, 1 … |
+| `once` | Play forward then hold on last scene: 1, 2, 3 → stop |
+| `random` | Random scene each tick |
+| `random_no_repeat` | Random, never the same scene twice in a row |
+| `strobe` | Alternate between first and last scene |
+| `shuffle` | Randomize order once, then cycle that order |
+
+Each entry has a `tick` value (in seconds) so you can control the speed per loop independently.
+
 ## Usage
 
 1. Open OBS and enable the WebSocket server (Tools → WebSocket Server Settings).
-2. Create scenes with a shared prefix, e.g. `SONG_A_intro`, `SONG_A_verse`, `SONG_A_chorus`.
+2. Create scenes with a shared prefix, e.g. `LOOP_A_1`, `LOOP_A_2`, `LOOP_A_3`. Scenes are natural-sorted so numeric order is preserved.
 3. Run the script:
 
 ```bash
@@ -58,4 +115,19 @@ python main.py
 ```
 
 4. Press a mapped MIDI note to **start** cycling the corresponding scene set.
-5. Press a kill switch note to **stop** cycling and switch to a static scene.
+5. Press a different mapped note to **switch** to another loop (the previous loop stops automatically).
+6. Press a kill switch note to **stop** cycling and switch to a static scene.
+
+### MIDI Debug Mode
+
+Set `MIDI_DEBUG = True` to skip the OBS connection and just log incoming MIDI messages. Useful for finding out which note numbers your controller sends.
+
+### Test Mode
+
+Set `TEST_MODE = True` to skip MIDI input and immediately start the first loop action from `MIDI_MAP`. Useful for verifying scene switching without a MIDI device.
+
+## Tests
+
+```bash
+python -m pytest test_main.py -v
+```

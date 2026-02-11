@@ -1,3 +1,5 @@
+import json
+import os
 import random
 import re
 import time
@@ -62,7 +64,7 @@ MIDI_DEBUG = False
 #
 # Note numbers: C2=36 … C3=48 … (MIDI convention where C3 = 48)
 
-MIDI_MAP = {
+DEFAULT_MIDI_MAP = {
     36: {"action": "loop", "prefix": "LOOP_A_", "style": "cycle",  "tick": 2.0},  # C2
     37: {"action": "loop", "prefix": "LOOP_B_", "style": "cycle",  "tick": 2.0},  # C#2
     38: {"action": "loop", "prefix": "LOOP_C_", "style": "cycle",  "tick": 2.0},  # D2
@@ -80,6 +82,35 @@ MIDI_MAP = {
     50: {"action": "loop", "prefix": "LOOP_N_", "style": "cycle",  "tick": 2.0},  # D3
     51: {"action": "kill", "scene": "STATIC_2"},                                   # D#3
 }
+
+CONFIG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.json")
+
+
+def load_config(path: str = CONFIG_PATH) -> dict[int, dict]:
+    """Load MIDI_MAP from a JSON config file.
+
+    The JSON file should have string keys (MIDI note numbers) mapping to
+    action dicts. Keys are converted to integers on load.
+
+    Returns DEFAULT_MIDI_MAP if the file does not exist.
+    Raises on invalid JSON or malformed content.
+    """
+    if not os.path.exists(path):
+        print(f"[config] No config file found at {path}, using defaults")
+        return dict(DEFAULT_MIDI_MAP)
+
+    with open(path, "r") as f:
+        raw = json.load(f)
+
+    midi_map = {}
+    for key, value in raw.items():
+        midi_map[int(key)] = value
+
+    print(f"[config] Loaded {len(midi_map)} mappings from {path}")
+    return midi_map
+
+
+MIDI_MAP = load_config()
 
 # ---------------------------------------------------------------------------
 # Globals

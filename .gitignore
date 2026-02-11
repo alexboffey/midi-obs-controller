@@ -13,6 +13,9 @@ build/
 .vscode/
 .idea/
 
+# User config (use config.example.json as a template)
+config.json
+
 # OS
 .DS_Store
 Thumbs.db

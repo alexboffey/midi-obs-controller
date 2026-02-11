@@ -1,6 +1,9 @@
-"""Unit tests for loop styles and kill switch logic."""
+"""Unit tests for loop styles, kill switch logic, and config loading."""
 
+import json
+import os
 import random
+import tempfile
 from unittest.mock import MagicMock, patch, call
 
 import main
@@ -207,3 +210,75 @@ class TestNaturalSort:
         names = ["LOOP_A_10", "LOOP_A_2", "LOOP_A_1", "LOOP_A_20"]
         result = sorted(names, key=main.natural_sort_key)
         assert result == ["LOOP_A_1", "LOOP_A_2", "LOOP_A_10", "LOOP_A_20"]
+
+
+# ---------------------------------------------------------------------------
+# load_config tests
+# ---------------------------------------------------------------------------
+
+class TestLoadConfig:
+
+    def test_falls_back_to_default_when_no_file(self):
+        result = main.load_config("/nonexistent/path/config.json")
+        assert result == main.DEFAULT_MIDI_MAP
+
+    def test_loads_config_from_json_file(self):
+        config_data = {
+            "60": {"action": "loop", "prefix": "TEST_A_", "style": "cycle", "tick": 1.0},
+            "61": {"action": "kill", "scene": "MY_STATIC"},
+        }
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+            json.dump(config_data, f)
+            tmp_path = f.name
+        try:
+            result = main.load_config(tmp_path)
+            assert result == {
+                60: {"action": "loop", "prefix": "TEST_A_", "style": "cycle", "tick": 1.0},
+                61: {"action": "kill", "scene": "MY_STATIC"},
+            }
+        finally:
+            os.unlink(tmp_path)
+
+    def test_keys_are_converted_to_integers(self):
+        config_data = {
+            "48": {"action": "loop", "prefix": "X_", "style": "cycle", "tick": 2.0},
+        }
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+            json.dump(config_data, f)
+            tmp_path = f.name
+        try:
+            result = main.load_config(tmp_path)
+            assert all(isinstance(k, int) for k in result.keys())
+            assert 48 in result
+        finally:
+            os.unlink(tmp_path)
+
+    def test_raises_on_invalid_json(self):
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+            f.write("not valid json {{{")
+            tmp_path = f.name
+        try:
+            raised = False
+            try:
+                main.load_config(tmp_path)
+            except json.JSONDecodeError:
+                raised = True
+            assert raised, "Expected JSONDecodeError for invalid JSON"
+        finally:
+            os.unlink(tmp_path)
+
+    def test_empty_config_returns_empty_map(self):
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+            json.dump({}, f)
+            tmp_path = f.name
+        try:
+            result = main.load_config(tmp_path)
+            assert result == {}
+        finally:
+            os.unlink(tmp_path)
+
+    def test_default_is_not_mutated(self):
+        """Ensure load_config returns a copy, not the original DEFAULT_MIDI_MAP."""
+        result = main.load_config("/nonexistent/path/config.json")
+        result[999] = {"action": "kill", "scene": "HACK"}
+        assert 999 not in main.DEFAULT_MIDI_MAP
