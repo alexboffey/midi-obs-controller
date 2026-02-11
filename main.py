@@ -65,22 +65,22 @@ MIDI_DEBUG = False
 # Note numbers: C2=36 … C3=48 … (MIDI convention where C3 = 48)
 
 DEFAULT_MIDI_MAP = {
-    36: {"action": "loop", "prefix": "LOOP_A_", "style": "cycle",  "tick": 2.0},  # C2
-    37: {"action": "loop", "prefix": "LOOP_B_", "style": "cycle",  "tick": 2.0},  # C#2
-    38: {"action": "loop", "prefix": "LOOP_C_", "style": "cycle",  "tick": 2.0},  # D2
-    39: {"action": "loop", "prefix": "LOOP_D_", "style": "cycle",  "tick": 2.0},  # D#2
-    40: {"action": "loop", "prefix": "LOOP_E_", "style": "cycle",  "tick": 2.0},  # E2
-    41: {"action": "loop", "prefix": "LOOP_F_", "style": "cycle",  "tick": 2.0},  # F2
-    42: {"action": "loop", "prefix": "LOOP_G_", "style": "bounce", "tick": 2.0},  # F#2
-    43: {"action": "kill", "scene": "STATIC_1"},                                   # G2
-    44: {"action": "loop", "prefix": "LOOP_H_", "style": "cycle",  "tick": 2.0},  # G#2
-    45: {"action": "loop", "prefix": "LOOP_I_", "style": "cycle",  "tick": 2.0},  # A2
-    46: {"action": "loop", "prefix": "LOOP_J_", "style": "cycle",  "tick": 2.0},  # A#2
-    47: {"action": "loop", "prefix": "LOOP_K_", "style": "cycle",  "tick": 2.0},  # B2
-    48: {"action": "loop", "prefix": "LOOP_L_", "style": "cycle",  "tick": 2.0},  # C3
-    49: {"action": "loop", "prefix": "LOOP_M_", "style": "bounce", "tick": 1.5},  # C#3
-    50: {"action": "loop", "prefix": "LOOP_N_", "style": "cycle",  "tick": 2.0},  # D3
-    51: {"action": "kill", "scene": "STATIC_2"},                                   # D#3
+    36: {"action": "loop", "prefix": "LOOP_A_", "style": "cycle",            "tick": 2.0},  # C2
+    37: {"action": "loop", "prefix": "LOOP_A_", "style": "bounce",           "tick": 2.0},  # C#2
+    38: {"action": "loop", "prefix": "LOOP_A_", "style": "reverse",          "tick": 2.0},  # D2
+    39: {"action": "loop", "prefix": "LOOP_A_", "style": "once",             "tick": 2.0},  # D#2
+    40: {"action": "loop", "prefix": "LOOP_A_", "style": "random",           "tick": 1.0},  # E2
+    41: {"action": "loop", "prefix": "LOOP_A_", "style": "random_no_repeat", "tick": 1.0},  # F2
+    42: {"action": "loop", "prefix": "LOOP_A_", "style": "strobe",           "tick": 0.5},  # F#2
+    43: {"action": "loop", "prefix": "LOOP_A_", "style": "shuffle",          "tick": 2.0},  # G2
+    44: {"action": "loop", "prefix": "LOOP_H_", "style": "cycle",            "tick": 2.0},  # G#2
+    45: {"action": "loop", "prefix": "LOOP_I_", "style": "cycle",            "tick": 2.0},  # A2
+    46: {"action": "loop", "prefix": "LOOP_J_", "style": "cycle",            "tick": 2.0},  # A#2
+    47: {"action": "loop", "prefix": "LOOP_K_", "style": "cycle",            "tick": 2.0},  # B2
+    48: {"action": "loop", "prefix": "LOOP_L_", "style": "cycle",            "tick": 2.0},  # C3
+    49: {"action": "loop", "prefix": "LOOP_M_", "style": "bounce",           "tick": 1.5},  # C#3
+    50: {"action": "loop", "prefix": "LOOP_N_", "style": "cycle",            "tick": 2.0},  # D3
+    51: {"action": "kill", "scene": "STATIC_2"},                                             # D#3
 }
 
 CONFIG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.json")
