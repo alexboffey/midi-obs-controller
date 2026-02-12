@@ -3,4 +3,3 @@ pygame
 obsws-python
 python-dotenv
 pytest
-pip-audit

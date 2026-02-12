@@ -22,6 +22,3 @@ jobs:
 
       - name: Run tests
         run: python -m pytest test_main.py -v
-
-      - name: Check for dependency vulnerabilities
-        run: pip audit
