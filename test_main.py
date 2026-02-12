@@ -1,4 +1,4 @@
-"""Unit tests for loop styles, kill switch logic, and config loading."""
+"""Unit tests for loop styles, static-scene logic, and config loading."""
 
 import json
 import os
@@ -182,23 +182,23 @@ class TestSceneLoopRandomNoRepeat:
 
 
 # ---------------------------------------------------------------------------
-# kill_switch tests
+# switch_to_static_scene tests
 # ---------------------------------------------------------------------------
 
-class TestKillSwitch:
+class TestSwitchToStaticScene:
 
-    def test_kill_switch_sets_scene(self):
+    def test_switch_to_static_scene_sets_scene(self):
         client = MagicMock()
         main.stop_event.clear()
-        main.kill_switch(client, "STATIC_1")
+        main.switch_to_static_scene(client, "STATIC_1")
         client.set_current_program_scene.assert_called_once_with("STATIC_1")
         assert main.stop_event.is_set()
 
-    def test_kill_switch_handles_missing_scene(self):
+    def test_switch_to_static_scene_handles_missing_scene(self):
         client = MagicMock()
         client.set_current_program_scene.side_effect = Exception("Scene not found")
         # Should not raise
-        main.kill_switch(client, "DOES_NOT_EXIST")
+        main.switch_to_static_scene(client, "DOES_NOT_EXIST")
         client.set_current_program_scene.assert_called_once_with("DOES_NOT_EXIST")
 
 
@@ -227,7 +227,7 @@ class TestLoadConfig:
     def test_loads_config_from_json_file(self):
         config_data = {
             "60": {"action": "loop", "prefix": "TEST_A_", "style": "cycle", "tick": 1.0},
-            "61": {"action": "kill", "scene": "MY_STATIC"},
+            "61": {"action": "static", "scene": "MY_STATIC"},
         }
         with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
             json.dump(config_data, f)
@@ -236,7 +236,7 @@ class TestLoadConfig:
             result = main.load_config(tmp_path)
             assert result == {
                 60: {"action": "loop", "prefix": "TEST_A_", "style": "cycle", "tick": 1.0},
-                61: {"action": "kill", "scene": "MY_STATIC"},
+                61: {"action": "static", "scene": "MY_STATIC"},
             }
         finally:
             os.unlink(tmp_path)
@@ -282,7 +282,7 @@ class TestLoadConfig:
     def test_default_is_not_mutated(self):
         """Ensure load_config returns a copy, not the original DEFAULT_MIDI_MAP."""
         result = main.load_config("/nonexistent/path/config.json")
-        result[999] = {"action": "kill", "scene": "HACK"}
+        result[999] = {"action": "static", "scene": "HACK"}
         assert 999 not in main.DEFAULT_MIDI_MAP
 
 
@@ -363,12 +363,12 @@ class TestRunSequence:
         # Step 3: stop
         assert calls == ["P_1", "P_2", "P_3", "P_3", "P_2", "P_1"]
 
-    def test_sequence_with_kill_step(self):
-        """Kill as the last step — no infinite loop, runs to completion."""
+    def test_sequence_with_static_step(self):
+        """Static as the last step — no infinite loop, runs to completion."""
         client = make_mock_client(["P_1", "P_2"])
         steps = [
             {"action": "loop", "prefix": "P_", "style": "cycle", "bpm": 6000, "steps": 1, "repeats": 1},
-            {"action": "kill", "scene": "STATIC_1"},
+            {"action": "static", "scene": "STATIC_1"},
         ]
 
         main.stop_event.clear()
@@ -377,7 +377,7 @@ class TestRunSequence:
 
         calls = [c.args[0] for c in client.set_current_program_scene.call_args_list]
         # Step 1: cycle P_1, P_2 (1 repeat)
-        # Step 2: kill → STATIC_1
+        # Step 2: static → STATIC_1
         assert calls == ["P_1", "P_2", "STATIC_1"]
 
     def test_sequence_cancelled_by_stop_event(self):
@@ -397,7 +397,7 @@ class TestRunSequence:
         client = make_mock_client(["P_1", "P_2", "P_3"])
         steps = [
             {"action": "loop", "prefix": "P_", "style": "cycle", "bpm": 6000, "steps": 1, "repeats": 2},
-            {"action": "kill", "scene": "SHOULD_NOT_REACH"},
+            {"action": "static", "scene": "SHOULD_NOT_REACH"},
         ]
         call_count = 0
 
@@ -413,7 +413,7 @@ class TestRunSequence:
             main.run_sequence(client, steps)
 
         calls = [c.args[0] for c in client.set_current_program_scene.call_args_list]
-        # Should have played 2 scenes then stopped, never reaching the kill step
+        # Should have played 2 scenes then stopped, never reaching the static step
         assert len(calls) == 2
         assert "SHOULD_NOT_REACH" not in calls
 
@@ -461,7 +461,7 @@ class TestRunSequence:
         client = make_mock_client(["P_1", "P_2"])
         steps = [
             {"action": "loop", "prefix": "P_", "style": "cycle", "bpm": 6000, "steps": 1, "repeats": 2},
-            {"action": "kill", "scene": "DONE"},
+            {"action": "static", "scene": "DONE"},
         ]
 
         main.stop_event.clear()
@@ -469,7 +469,7 @@ class TestRunSequence:
             main.run_sequence(client, steps)
 
         calls = [c.args[0] for c in client.set_current_program_scene.call_args_list]
-        # 2 repeats of [P_1, P_2] = 4 scenes, then kill
+        # 2 repeats of [P_1, P_2] = 4 scenes, then static
         assert calls == ["P_1", "P_2", "P_1", "P_2", "DONE"]
 
     def test_pause_resumes_and_continues(self):
@@ -478,7 +478,7 @@ class TestRunSequence:
         steps = [
             {"action": "loop", "prefix": "P_", "style": "cycle", "bpm": 6000, "steps": 1, "repeats": 1},
             {"action": "pause"},
-            {"action": "kill", "scene": "DONE"},
+            {"action": "static", "scene": "DONE"},
         ]
 
         def fake_resume_wait(timeout):
@@ -494,7 +494,7 @@ class TestRunSequence:
             main.run_sequence(client, steps, trigger_note=36)
 
         calls = [c.args[0] for c in client.set_current_program_scene.call_args_list]
-        # Loop: P_1, P_2 → pause (resumed) → kill: DONE
+        # Loop: P_1, P_2 → pause (resumed) → static: DONE
         assert calls == ["P_1", "P_2", "DONE"]
 
     def test_pause_cancelled_by_stop_event(self):
@@ -503,7 +503,7 @@ class TestRunSequence:
         steps = [
             {"action": "loop", "prefix": "P_", "style": "cycle", "bpm": 6000, "steps": 1, "repeats": 1},
             {"action": "pause"},
-            {"action": "kill", "scene": "SHOULD_NOT_REACH"},
+            {"action": "static", "scene": "SHOULD_NOT_REACH"},
         ]
 
         def fake_resume_wait(timeout):
@@ -519,7 +519,7 @@ class TestRunSequence:
             main.run_sequence(client, steps, trigger_note=36)
 
         calls = [c.args[0] for c in client.set_current_program_scene.call_args_list]
-        # Loop: P_1, P_2 → pause (cancelled) — kill never reached
+        # Loop: P_1, P_2 → pause (cancelled) — static never reached
         assert calls == ["P_1", "P_2"]
         assert "SHOULD_NOT_REACH" not in calls
 

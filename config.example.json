@@ -6,7 +6,7 @@
   "40": {"action": "loop", "prefix": "LOOP_E_", "style": "cycle",  "bpm": 120, "steps": 4},
   "41": {"action": "loop", "prefix": "LOOP_F_", "style": "cycle",  "bpm": 120, "steps": 4},
   "42": {"action": "loop", "prefix": "LOOP_G_", "style": "bounce", "bpm": 120, "steps": 4},
-  "43": {"action": "kill", "scene": "STATIC_1"},
+  "43": {"action": "static", "scene": "STATIC_1"},
   "44": {"action": "loop", "prefix": "LOOP_H_", "style": "cycle",  "bpm": 120, "steps": 4},
   "45": {"action": "loop", "prefix": "LOOP_I_", "style": "cycle",  "bpm": 120, "steps": 4},
   "46": {"action": "loop", "prefix": "LOOP_J_", "style": "cycle",  "bpm": 120, "steps": 4},
@@ -16,12 +16,12 @@
     {"action": "loop", "prefix": "LOOP_A_", "style": "cycle",  "bpm": 120, "steps": 4, "repeats": 2},
     {"action": "pause"},
     {"action": "loop", "prefix": "LOOP_B_", "style": "bounce", "bpm": 120, "steps": 2, "repeats": 3},
-    {"action": "kill", "scene": "STATIC_1"}
+    {"action": "static", "scene": "STATIC_1"}
   ]},
   "50": {"action": "sequence", "steps": [
     {"action": "loop", "prefix": "LOOP_A_", "style": "cycle",  "bpm": 120, "steps": 4, "repeats": 2},
     {"action": "loop", "prefix": "LOOP_B_", "style": "bounce", "bpm": 120, "steps": 2, "repeats": 3},
     {"action": "stop"}
   ]},
-  "51": {"action": "kill", "scene": "STATIC_2"}
+  "51": {"action": "static", "scene": "STATIC_2"}
 }

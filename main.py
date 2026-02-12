@@ -36,7 +36,7 @@ MIDI_DEBUG = False
 # Each entry maps a MIDI note number to an action dict.
 #
 # --- Kill action (stop loop, switch to a static scene) ---
-#   {"action": "kill", "scene": "STATIC_1"}
+#   {"action": "static", "scene": "STATIC_1"}
 #
 # --- Loop actions (cycle through scenes matching a prefix) ---
 # Each loop action requires: action, prefix, style, bpm, steps
@@ -72,7 +72,7 @@ MIDI_DEBUG = False
 # After the last step, the sequence wraps back to step 1.
 #
 # Terminal actions (end the sequence when reached):
-#   "kill"  – switch to a static scene and stop
+#   "static" – switch to a static scene and stop
 #   "stop"  – stop without changing the scene
 #
 # Pause action (hold until resumed):
@@ -92,7 +92,7 @@ MIDI_DEBUG = False
 # Ends on a static scene:
 #   {"action": "sequence", "steps": [
 #       {"action": "loop", "prefix": "LOOP_A_", "style": "cycle",  "bpm": 120, "steps": 4, "repeats": 3},
-#       {"action": "kill", "scene": "STATIC_1"}
+#       {"action": "static", "scene": "STATIC_1"}
 #   ]}
 #
 # Ends silently (holds last scene):
@@ -131,7 +131,7 @@ DEFAULT_MIDI_MAP = {
     48: {"action": "loop", "prefix": "LOOP_L_", "style": "cycle",            "bpm": 120, "steps": 4},  # C3
     49: {"action": "loop", "prefix": "LOOP_M_", "style": "bounce",           "bpm": 124, "steps": 1},  # C#3
     50: {"action": "loop", "prefix": "LOOP_N_", "style": "cycle",            "bpm": 120, "steps": 4},  # D3
-    51: {"action": "kill", "scene": "STATIC_2"},                                                         # D#3
+    51: {"action": "static", "scene": "STATIC_2"},                                                         # D#3
 }
 
 CONFIG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.json")
@@ -285,22 +285,22 @@ def stop_loop():
     pause_resume_note = None
 
 
-def kill_switch(client: obs.ReqClient, scene_name: str):
+def switch_to_static_scene(client: obs.ReqClient, scene_name: str):
     """Stop any running loop and switch to a specific static scene."""
     stop_loop()
-    print(f"[kill] Switching to static scene: {scene_name}")
+    print(f"[static] Switching to scene: {scene_name}")
     try:
         client.set_current_program_scene(scene_name)
     except Exception as e:
-        print(f"[kill] Failed to switch to '{scene_name}': {e}")
+        print(f"[static] Failed to switch to '{scene_name}': {e}")
 
 
 def run_sequence(client: obs.ReqClient, steps: list[dict], trigger_note: int = None):
-    """Run a sequence of loop/kill/stop/pause steps, looping continuously.
+    """Run a sequence of loop/static/stop/pause steps, looping continuously.
 
     The sequence repeats from the beginning after all steps complete.
     Terminal actions (end the sequence when reached):
-      - kill: switch to a static scene and end.
+      - static: switch to a static scene and end.
       - stop: end without changing the scene.
     Pause action:
       - pause: hold the current scene until the resume note is pressed.
@@ -328,14 +328,14 @@ def run_sequence(client: obs.ReqClient, steps: list[dict], trigger_note: int = N
                 print("[seq] Sequence complete (terminal stop).")
                 return
 
-            elif kind == "kill":
+            elif kind == "static":
                 scene = step["scene"]
-                print(f"[seq] Step {i + 1}/{len(steps)} – kill (scene={scene})")
+                print(f"[seq] Step {i + 1}/{len(steps)} – static (scene={scene})")
                 try:
                     client.set_current_program_scene(scene)
                 except Exception as e:
                     print(f"[seq] Failed to switch to '{scene}': {e}")
-                print("[seq] Sequence complete (terminal kill).")
+                print("[seq] Sequence complete (terminal static).")
                 return
 
             elif kind == "pause":
@@ -413,10 +413,10 @@ def handle_midi(msg, client: obs.ReqClient):
         tick = calc_tick(entry["bpm"], entry["steps"])
         print(f"[midi] note {msg.note} – {style} loop (prefix={prefix}, bpm={entry['bpm']}, steps={entry['steps']}, tick={tick:.3f}s)")
         start_loop(client, prefix, style, tick)
-    elif kind == "kill":
+    elif kind == "static":
         scene = entry["scene"]
-        print(f"[midi] note {msg.note} – kill switch (scene={scene})")
-        kill_switch(client, scene)
+        print(f"[midi] note {msg.note} – static scene (scene={scene})")
+        switch_to_static_scene(client, scene)
     elif kind == "sequence":
         steps = entry["steps"]
         print(f"[midi] note {msg.note} – sequence ({len(steps)} steps)")

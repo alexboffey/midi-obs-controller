@@ -42,7 +42,7 @@ Edit the variables at the top of `main.py`:
 | `OBS_PORT` | `4455` | OBS WebSocket port |
 | `OBS_PASSWORD` | `""` | OBS WebSocket password |
 | `MIDI_PORT_NAME` | `None` | MIDI input port (None = first available) |
-| `MIDI_MAP` | see code | Maps MIDI note numbers to loop/kill actions |
+| `MIDI_MAP` | see code | Maps MIDI note numbers to loop/static/sequence actions |
 | `TEST_MODE` | `False` | Skip MIDI, immediately start first loop |
 | `MIDI_DEBUG` | `False` | Log all MIDI input, skip OBS connection |
 
@@ -63,7 +63,7 @@ The JSON file maps MIDI note numbers (as strings) to action objects:
 ```json
 {
   "48": {"action": "loop", "prefix": "LOOP_A_", "style": "cycle", "bpm": 120, "steps": 4},
-  "43": {"action": "kill", "scene": "STATIC_1"}
+  "43": {"action": "static", "scene": "STATIC_1"}
 }
 ```
 
@@ -87,10 +87,10 @@ If you prefer not to use a separate file, edit the `DEFAULT_MIDI_MAP` dict direc
 - `steps` — number of beats per scene switch
 - Scene switch interval = `(60 / bpm) * steps` seconds (e.g. 120 BPM, 4 steps = 2.0s)
 
-**Kill** — stop any running loop and switch to a static scene:
+**Static** — stop any running loop and switch to a static scene:
 
 ```json
-{"action": "kill", "scene": "STATIC_1"}
+{"action": "static", "scene": "STATIC_1"}
 ```
 
 **Stop** — end a sequence without changing the scene:
@@ -108,9 +108,9 @@ If you prefer not to use a separate file, edit the `DEFAULT_MIDI_MAP` dict direc
 
 By default the resume note is the same MIDI note that started the sequence. Use `resume_note` to override. Pressing any other mapped note cancels the sequence.
 
-**Sequence** — run a series of loop/kill/stop/pause steps in order:
+**Sequence** — run a series of loop/static/stop/pause steps in order:
 
-Sequences loop continuously by default. After the last step, the sequence wraps back to step 1. Use a terminal action (`kill` or `stop`) as the last step to end the sequence instead.
+Sequences loop continuously by default. After the last step, the sequence wraps back to step 1. Use a terminal action (`static` or `stop`) as the last step to end the sequence instead.
 
 ```json
 {
@@ -119,14 +119,14 @@ Sequences loop continuously by default. After the last step, the sequence wraps 
     {"action": "loop", "prefix": "LOOP_A_", "style": "cycle",  "bpm": 120, "steps": 4, "repeats": 3},
     {"action": "pause"},
     {"action": "loop", "prefix": "LOOP_A_", "style": "bounce", "bpm": 120, "steps": 2, "repeats": 2},
-    {"action": "kill", "scene": "STATIC_1"}
+    {"action": "static", "scene": "STATIC_1"}
   ]
 }
 ```
 
 - `repeats` controls how many full cycles a step runs before advancing to the next step (default: 1)
 - Sequences loop continuously — omit a terminal action to repeat forever
-- `kill` as the last step ends the sequence and switches to a static scene
+- `static` as the last step ends the sequence and switches to a static scene
 - `stop` as the last step ends the sequence silently (holds the last scene)
 - `pause` holds the current scene until the resume note is pressed
 - Pressing any other mapped MIDI note cancels the running sequence
@@ -156,10 +156,10 @@ Sequences let you chain multiple actions together. They loop continuously by def
 |---|---|
 | `loop` | Run a loop for a number of repeats (default: 1), then advance |
 | `pause` | Hold the current scene until the resume note is pressed |
-| `kill` | Switch to a static scene and **end** the sequence |
+| `static` | Switch to a static scene and **end** the sequence |
 | `stop` | **End** the sequence without changing the scene |
 
-`kill` and `stop` are **terminal actions** — the sequence ends when it reaches one. If the last step is a `loop`, the sequence wraps back to step 1 and keeps going.
+`static` and `stop` are **terminal actions** — the sequence ends when it reaches one. If the last step is a `loop`, the sequence wraps back to step 1 and keeps going.
 
 ### Example: loop forever
 
@@ -175,7 +175,7 @@ Sequences let you chain multiple actions together. They loop continuously by def
 ```json
 {"action": "sequence", "steps": [
   {"action": "loop", "prefix": "LOOP_A_", "style": "cycle", "bpm": 120, "steps": 4, "repeats": 2},
-  {"action": "kill", "scene": "STATIC_1"}
+  {"action": "static", "scene": "STATIC_1"}
 ]}
 ```
 
@@ -210,7 +210,7 @@ python main.py
 
 4. Press a mapped MIDI note to **start** cycling the corresponding scene set.
 5. Press a different mapped note to **switch** to another loop (the previous loop stops automatically).
-6. Press a kill switch note to **stop** cycling and switch to a static scene.
+6. Press a static-scene note to **stop** cycling and switch to a static scene.
 
 ### MIDI Debug Mode
 
