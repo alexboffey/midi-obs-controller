@@ -25,7 +25,7 @@ OBS_PASSWORD = os.getenv("OBS_PASSWORD", "HrCDuVNv7Sfxdxzi")
 MIDI_PORT_NAME = None
 
 # Set to True to skip MIDI and immediately start the first loop action
-TEST_MODE = False
+TEST_MODE = os.getenv("TEST_MODE", "localhost") or False
 
 # Set to True to log all incoming MIDI messages and skip OBS connection
 MIDI_DEBUG = False
