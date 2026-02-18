@@ -2,6 +2,7 @@ import json
 import os
 import random
 import re
+import sys
 import time
 import threading
 
@@ -134,7 +135,13 @@ DEFAULT_MIDI_MAP = {
     51: {"action": "static", "scene": "STATIC_2"},                                                         # D#3
 }
 
-CONFIG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.json")
+_base_dir = (
+    os.path.dirname(sys.executable)
+    if getattr(sys, "frozen", False)
+    else os.path.dirname(os.path.abspath(__file__))
+)
+CONFIG_PATH = os.path.join(_base_dir, "config.json")
+EXAMPLE_CONFIG = "config.example.json"
 
 
 def load_config(path: str = CONFIG_PATH) -> dict[int, dict]:
@@ -159,7 +166,39 @@ def load_config(path: str = CONFIG_PATH) -> dict[int, dict]:
     return midi_map
 
 
-MIDI_MAP = load_config()
+def find_config_files(directory: str = _base_dir) -> list[str]:
+    """Return sorted absolute paths of all *.json files in *directory*,
+    excluding config.example.json."""
+    return sorted(
+        e.path for e in os.scandir(directory)
+        if e.is_file() and e.name.endswith(".json") and e.name != EXAMPLE_CONFIG
+    )
+
+
+def pick_config_file(config_files: list[str]) -> str | None:
+    """Return the config file to use.
+
+    0 files → None (caller falls back to CONFIG_PATH default).
+    1 file  → return it directly.
+    2+ files → show an arrow-key prompt via questionary.
+    """
+    if not config_files:
+        return None
+    if len(config_files) == 1:
+        return config_files[0]
+    import questionary
+    chosen = questionary.select(
+        "Multiple config files found — choose one:",
+        choices=[os.path.basename(p) for p in config_files],
+    ).ask()
+    if chosen is None:
+        raise SystemExit("No config selected. Exiting.")
+    return next(p for p in config_files if os.path.basename(p) == chosen)
+
+
+_config_files = find_config_files()
+_chosen = pick_config_file(_config_files)
+MIDI_MAP = load_config(_chosen if _chosen is not None else CONFIG_PATH)
 
 # ---------------------------------------------------------------------------
 # Globals

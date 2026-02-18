@@ -2,8 +2,10 @@
 
 import json
 import os
+import pytest
 import random
 import tempfile
+from pathlib import Path
 from unittest.mock import MagicMock, patch, call
 
 import main
@@ -598,3 +600,75 @@ class TestCalcTick:
     def test_high_bpm_fast_tick(self):
         # 240 BPM, 1 step = 0.25s
         assert main.calc_tick(240, 1) == 0.25
+
+
+# ---------------------------------------------------------------------------
+# find_config_files tests
+# ---------------------------------------------------------------------------
+
+class TestFindConfigFiles:
+
+    def test_empty_directory(self, tmp_path):
+        result = main.find_config_files(str(tmp_path))
+        assert result == []
+
+    def test_finds_json_files(self, tmp_path):
+        (tmp_path / "config.json").touch()
+        (tmp_path / "show.json").touch()
+        result = main.find_config_files(str(tmp_path))
+        assert len(result) == 2
+
+    def test_excludes_example_config(self, tmp_path):
+        (tmp_path / "config.example.json").touch()
+        (tmp_path / "config.json").touch()
+        result = main.find_config_files(str(tmp_path))
+        assert len(result) == 1
+        assert all("config.example.json" not in r for r in result)
+
+    def test_excludes_non_json_files(self, tmp_path):
+        (tmp_path / "config.json").touch()
+        (tmp_path / "readme.txt").touch()
+        result = main.find_config_files(str(tmp_path))
+        assert len(result) == 1
+
+    def test_returns_sorted_paths(self, tmp_path):
+        (tmp_path / "z.json").touch()
+        (tmp_path / "a.json").touch()
+        (tmp_path / "m.json").touch()
+        result = main.find_config_files(str(tmp_path))
+        assert result == sorted(result)
+
+    def test_returns_absolute_paths(self, tmp_path):
+        (tmp_path / "config.json").touch()
+        result = main.find_config_files(str(tmp_path))
+        assert all(os.path.isabs(p) for p in result)
+
+
+# ---------------------------------------------------------------------------
+# pick_config_file tests
+# ---------------------------------------------------------------------------
+
+class TestPickConfigFile:
+
+    def test_no_files_returns_none(self):
+        assert main.pick_config_file([]) is None
+
+    def test_single_file_returns_it(self, tmp_path):
+        f = str(tmp_path / "config.json")
+        assert main.pick_config_file([f]) == f
+
+    def test_multiple_files_prompts_and_returns_chosen(self, tmp_path, monkeypatch):
+        files = [str(tmp_path / "a.json"), str(tmp_path / "b.json")]
+        mock_result = MagicMock()
+        mock_result.ask.return_value = "a.json"
+        monkeypatch.setattr("questionary.select", lambda *a, **kw: mock_result)
+        result = main.pick_config_file(files)
+        assert result == files[0]
+
+    def test_multiple_files_none_selection_exits(self, tmp_path, monkeypatch):
+        files = [str(tmp_path / "a.json"), str(tmp_path / "b.json")]
+        mock_result = MagicMock()
+        mock_result.ask.return_value = None
+        monkeypatch.setattr("questionary.select", lambda *a, **kw: mock_result)
+        with pytest.raises(SystemExit):
+            main.pick_config_file(files)

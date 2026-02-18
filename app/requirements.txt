@@ -2,4 +2,5 @@ mido
 pygame
 obsws-python
 python-dotenv
+questionary
 pytest
