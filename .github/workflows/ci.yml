@@ -9,6 +9,9 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
 
     steps:
       - uses: actions/checkout@v4
@@ -27,6 +30,9 @@ jobs:
     needs: test
     if: github.event_name == 'push'
     runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: app
     permissions:
       contents: write
 
@@ -46,7 +52,7 @@ jobs:
       - name: Create or update latest release
         uses: ncipollo/release-action@v1
         with:
-          artifacts: dist/midi-obs-controller.exe
+          artifacts: app/dist/midi-obs-controller.exe
           tag: latest
           name: Latest
           body: |

@@ -8,7 +8,9 @@ Press a MIDI note → OBS cycles through a set of scenes matching a prefix. Diff
 
 ## Architecture
 
-Single-file script (`main.py`) with no web server or UI. Connects to OBS via WebSocket (`obsws-python`) and listens for MIDI input (`mido` with `pygame` backend). All scene switching runs in a background thread controlled by a `threading.Event` for clean start/stop.
+Single-file script (`app/main.py`) with no web server or UI. Connects to OBS via WebSocket (`obsws-python`) and listens for MIDI input (`mido` with `pygame` backend). All scene switching runs in a background thread controlled by a `threading.Event` for clean start/stop.
+
+A companion web GUI (`gui/`) is a Svelte 5 + Vite app that uses the Web MIDI API to listen for MIDI input and build `config.json` files visually, then export them to `app/`.
 
 ### Key concepts
 
@@ -25,24 +27,33 @@ Single-file script (`main.py`) with no web server or UI. Connects to OBS via Web
 
 | File | Purpose |
 |---|---|
-| `main.py` | All application logic |
-| `config.json` | User MIDI map config (gitignored) |
-| `config.example.json` | Template config committed to repo |
-| `test_main.py` | Unit tests (pytest) |
-| `requirements.txt` | Python dependencies |
+| `app/main.py` | All application logic |
+| `app/config.json` | User MIDI map config (gitignored) |
+| `app/config.example.json` | Template config committed to repo |
+| `app/test_main.py` | Unit tests (pytest) |
+| `app/requirements.txt` | Python dependencies |
+| `app/midi-obs-controller.spec` | PyInstaller build spec |
+| `gui/` | Svelte + Vite config-builder GUI (see `gui/README.md`) |
 | `.github/workflows/ci.yml` | CI — runs tests on push/PR to main; builds exe and publishes a "Latest" GitHub Release on push to main (after tests pass) |
 
 ## Tech stack
 
+**Python app (`app/`):**
 - Python 3.9+
 - `mido` + `pygame` — MIDI input (pure Python, no compiler needed)
 - `obsws-python` — OBS WebSocket client
+- `questionary` — arrow-key terminal selector for multi-config picker
 - `pytest` — testing
-- `pyinstaller` — builds a standalone `dist/midi-obs-controller.exe` (see README for the build command)
+- `pyinstaller` — builds a standalone `app/dist/midi-obs-controller.exe`
+
+**GUI (`gui/`):**
+- Svelte 5 + Vite — component framework with `$state` runes
+- Tailwind CSS v4 via `@tailwindcss/vite`
+- Web MIDI API — browser MIDI device access (requires localhost or HTTPS)
 
 ## Conventions
 
-- All config lives at the top of `main.py` (OBS connection, MIDI port, debug flags)
+- All config lives at the top of `app/main.py` (OBS connection, MIDI port, debug flags)
 - MIDI map can be configured via `config.json` or `DEFAULT_MIDI_MAP` in code
 - Scene names use prefixes (e.g. `LOOP_A_1`, `LOOP_A_2`) and are natural-sorted
 - Only one loop/sequence runs at a time — starting a new one cancels the previous
@@ -50,6 +61,6 @@ Single-file script (`main.py`) with no web server or UI. Connects to OBS via Web
 
 ## When making changes
 
-- **Tests** — write or update unit tests in `test_main.py` for any new or changed behavior. Run `python -m pytest test_main.py -v` to verify.
+- **Tests** — write or update unit tests in `app/test_main.py` for any new or changed behavior. Run `cd app && python -m pytest test_main.py -v` to verify.
 - **Documentation** — update `README.md` when adding features, changing config format, or modifying behavior. Keep the action types, loop styles, and sequencer sections current.
 - **AGENTS.md** — update this file if the architecture, key concepts, or conventions change.

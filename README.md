@@ -7,6 +7,7 @@ Listens for MIDI input and cycles through OBS scenes that match a given prefix.
 **macOS / Linux:**
 
 ```bash
+cd app
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
@@ -15,6 +16,7 @@ pip install -r requirements.txt
 **Windows (PowerShell):**
 
 ```powershell
+cd app
 py -3 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
@@ -26,15 +28,15 @@ pip install -r requirements.txt
 **Windows (Command Prompt):**
 
 ```cmd
+cd app
 python -m venv .venv
-
 .venv\Scripts\activate.bat
 pip install -r requirements.txt
 ```
 
 ## Configuration
 
-Edit the variables at the top of `main.py`:
+Edit the variables at the top of `app/main.py`:
 
 | Variable | Default | Description |
 |---|---|---|
@@ -55,7 +57,7 @@ The MIDI map controls which note triggers which action. You can configure it in 
 Copy the example file and edit it:
 
 ```bash
-cp config.example.json config.json
+cp app/config.example.json app/config.json
 ```
 
 The JSON file maps MIDI note numbers (as strings) to action objects:
@@ -67,11 +69,11 @@ The JSON file maps MIDI note numbers (as strings) to action objects:
 }
 ```
 
-The script loads `config.json` on startup. If the file doesn't exist, it falls back to the hardcoded default in `main.py`.
+The script loads `app/config.json` on startup. If the file doesn't exist, it falls back to the hardcoded default in `app/main.py`.
 
 > `config.json` is gitignored so your personal config won't be committed.
 
-### Option 2: Edit `DEFAULT_MIDI_MAP` in `main.py`
+### Option 2: Edit `DEFAULT_MIDI_MAP` in `app/main.py`
 
 If you prefer not to use a separate file, edit the `DEFAULT_MIDI_MAP` dict directly in the code. This is used as the fallback when no `config.json` is present.
 
@@ -205,6 +207,7 @@ Pressing any other mapped MIDI note cancels the sequence entirely.
 3. Run the script:
 
 ```bash
+cd app
 python main.py
 ```
 
@@ -223,5 +226,6 @@ Set `TEST_MODE = True` to skip MIDI input and immediately start the first loop a
 ## Tests
 
 ```bash
+cd app
 python -m pytest test_main.py -v
 ```
