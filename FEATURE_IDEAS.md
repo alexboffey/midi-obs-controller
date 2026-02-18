@@ -11,6 +11,7 @@ _Nothing here yet — move ideas up from below when ready to build._
 - **MIDI CC for dynamic VJ parameters** — use MIDI CC (continuous controller) messages to control real-time parameters in OBS (e.g. filter opacity, source transforms, colour correction) rather than just note-on triggers for scene switching
 - **OBS configuration scripting** — store video assets (via Git LFS), scene collection configs, and other OBS resources in the repo. Provide a setup script that places them in the correct OS-specific OBS directories so the full live set can be imported to OBS on a fresh machine
 - **Configurable MIDI ports / multiple controllers** — support specifying which MIDI port(s) to listen to (e.g. by name or device ID) and/or accept input from multiple controllers at once (e.g. pad controller for scenes + keyboard for CC)
+- **Search for obs scenes from the midi map editor gui** - this should list all of the available scenes in OBS then allow a user to click one then press a midi note and add to assignment
 - **Add virtual midi controller to web gui** - this will allow testing of the python application and the web gui's midi assignment without requiring the user to have a midi controller
 
 ## Project ideas

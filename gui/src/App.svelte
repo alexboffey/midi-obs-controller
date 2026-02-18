@@ -1,36 +1,42 @@
 <script lang="ts">
   import { onMount } from 'svelte'
   import { store } from './lib/store.svelte.js'
+  import { obsStore } from './lib/obs.svelte.js'
+  import { nextUnassignedScene } from './lib/obsLogic.js'
   import type { ActionConfig, SequenceStepAction } from './lib/types.js'
-  import NoteList from './components/NoteList.svelte'
-  import NoteEditor from './components/NoteEditor.svelte'
-  import BulkEditor from './components/BulkEditor.svelte'
+  import NoteList    from './components/NoteList.svelte'
+  import NoteEditor  from './components/NoteEditor.svelte'
+  import BulkEditor  from './components/BulkEditor.svelte'
+  import ObsPanel    from './components/ObsPanel.svelte'
 
   const LS_CONFIG   = 'midi-obs-config'
   const LS_LISTEN   = 'midi-obs-listen'
   const LS_FILENAME = 'midi-obs-filename'
+  const LS_DEVICE   = 'midi-obs-device'
 
-  let selectedNote   = $state<string | null>(null)
-  let midiAccess     = $state<MIDIAccess | null>(null)
-  let midiInputs     = $state<MIDIInput[]>([])
+  let selectedNote    = $state<string | null>(null)
+  let midiAccess      = $state<MIDIAccess | null>(null)
+  let midiInputs      = $state<MIDIInput[]>([])
   let selectedInputId = $state('')
-  let listenMode     = $state(false)
-  let filename       = $state('config.json')
-  let midiError      = $state('')
-  let fileHandle     = $state<FileSystemFileHandle | null>(null)
-  let view           = $state<'edit' | 'bulk'>('edit')
+  let listenMode      = $state(false)
+  let filename        = $state('config.json')
+  let midiError       = $state('')
+  let fileHandle      = $state<FileSystemFileHandle | null>(null)
+  let view            = $state<'edit' | 'bulk'>('edit')
+  let obsOpen         = $state(false)
+  let pendingObsScene = $state<string | null>(null)
   // Guard so $effects don't overwrite localStorage before onMount restores it
-  let restored       = $state(false)
+  let restored        = $state(false)
   // Snapshot of the config as it was at last file save/import; '' = no file linked yet
-  let lastSaved      = $state('')
-  let isDirty        = $state(false)
+  let lastSaved       = $state('')
+  let isDirty         = $state(false)
   // Brief "Saving..." pulse shown while localStorage auto-save is in flight
-  let saving         = $state(false)
-  // Derived JSON string — computed inside a reactive context so Svelte tracks
-  // both new-key additions and existing-value mutations on store.entries
-  const configJson   = $derived(JSON.stringify(store.entries))
+  let saving          = $state(false)
+  // Derived JSON — $derived tracks both new-key additions AND value mutations
+  const configJson    = $derived(JSON.stringify(store.entries))
 
   onMount(async () => {
+    // Restore persisted state
     try {
       const raw = localStorage.getItem(LS_CONFIG)
       if (raw) store.load(JSON.parse(raw))
@@ -40,6 +46,8 @@
       if (savedFilename) filename = savedFilename
     } catch { /* ignore corrupt localStorage */ }
     restored = true
+
+    obsStore.restoreSettings()
 
     if (!navigator.requestMIDIAccess) {
       midiError = 'Web MIDI API not available. Use Chrome or Edge on localhost / HTTPS.'
@@ -58,12 +66,21 @@
   function updateInputs() {
     if (!midiAccess) return
     midiInputs = Array.from(midiAccess.inputs.values())
-    if (midiInputs.length > 0 && !selectedInputId) {
+    if (!midiInputs.length) return
+    // Restore last-used device by name (more stable than ID across sessions)
+    const savedName = localStorage.getItem(LS_DEVICE)
+    if (savedName) {
+      const match = midiInputs.find(i => i.name === savedName)
+      if (match) { selectedInputId = match.id; return }
+    }
+    // Fall back to first available device
+    if (!selectedInputId || !midiInputs.some(i => i.id === selectedInputId)) {
       selectedInputId = midiInputs[0].id
     }
   }
 
-  // Auto-save config entries; pulse the saving indicator while writing
+  // ── Persistence effects ─────────────────────────────────────────────
+
   $effect(() => {
     if (!restored) return
     localStorage.setItem(LS_CONFIG, configJson)
@@ -72,36 +89,38 @@
     return () => clearTimeout(timer)
   })
 
-  // Auto-save listenMode and filename
   $effect(() => {
     if (!restored) return
     localStorage.setItem(LS_LISTEN, String(listenMode))
     localStorage.setItem(LS_FILENAME, filename)
   })
 
-  // Warn before closing/refreshing when there are unsaved file changes
+  // Remember selected MIDI device by name
+  $effect(() => {
+    if (!restored) return
+    const input = midiInputs.find(i => i.id === selectedInputId)
+    if (input) localStorage.setItem(LS_DEVICE, input.name)
+  })
+
+  // ── Unsaved-changes tracking ─────────────────────────────────────────
+
   $effect(() => {
     const handle = (e: BeforeUnloadEvent) => {
-      if (isDirty) {
-        e.preventDefault()
-        e.returnValue = ''
-      }
+      if (isDirty) { e.preventDefault(); e.returnValue = '' }
     }
     window.addEventListener('beforeunload', handle)
     return () => window.removeEventListener('beforeunload', handle)
   })
 
-  // Debounced dirty check — compares current entries to the last saved snapshot
   $effect(() => {
-    if (lastSaved === '') return           // no file linked yet
-    const current = configJson            // $derived ensures new keys + mutations are tracked
-    const timer = setTimeout(() => {
-      isDirty = current !== lastSaved
-    }, 400)
+    if (lastSaved === '') return
+    const current = configJson
+    const timer = setTimeout(() => { isDirty = current !== lastSaved }, 400)
     return () => clearTimeout(timer)
   })
 
-  // Bind/unbind MIDI message handler when listenMode or device changes
+  // ── MIDI ─────────────────────────────────────────────────────────────
+
   $effect(() => {
     if (!midiAccess) return
     for (const input of midiAccess.inputs.values()) {
@@ -121,18 +140,26 @@
     if (!isNoteOn) return
     const key = String(note)
     if (!store.entries[key]) {
-      store.add(key, store.defaultAction())
+      if (pendingObsScene) {
+        // User clicked a specific OBS scene — assign it, then advance to next unassigned
+        const scene = pendingObsScene
+        store.add(key, { action: 'static', scene })
+        const nextIdx = obsStore.scenes.indexOf(scene) + 1
+        pendingObsScene = nextUnassignedScene(obsStore.scenes, store.entries, nextIdx)
+      } else if (obsStore.status === 'connected' && obsStore.scenes.length > 0) {
+        // OBS connected, no scene selected — auto-pick next unassigned OBS scene
+        const scene = nextUnassignedScene(obsStore.scenes, store.entries)
+        store.add(key, scene ? { action: 'static', scene } : store.defaultAction())
+      } else {
+        store.add(key, store.defaultAction())
+      }
     }
     selectedNote = key
+    view = 'edit'
   }
 
-  /** Export / save config.
-   *  - If File System Access API is available (Chrome/Edge) and a handle is cached,
-   *    writes directly to that file on disk without a prompt.
-   *  - On first save (or after "Change location"), opens a save-file picker so the
-   *    user can navigate to their midi-obs-controller folder.
-   *  - Falls back to a blob download on browsers that don't support the API.
-   */
+  // ── Export / Import ──────────────────────────────────────────────────
+
   async function exportConfig() {
     const output: Record<string, ActionConfig> = {}
     for (const [note, action] of Object.entries(store.entries)) {
@@ -153,31 +180,30 @@
         const writable = await fileHandle!.createWritable()
         await writable.write(json)
         await writable.close()
-        lastSaved = JSON.stringify(store.entries)
-        isDirty = false
+        lastSaved = configJson
+        isDirty   = false
         return
       } catch (e: unknown) {
-        if ((e as DOMException)?.name === 'AbortError') return   // user cancelled picker
-        fileHandle = null                                          // lost permission — retry next time
+        if ((e as DOMException)?.name === 'AbortError') return
+        fileHandle = null
       }
     }
 
-    // Fallback: browser blob download
+    // Fallback: blob download
     const blob = new Blob([json], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
+    const url  = URL.createObjectURL(blob)
+    const a    = document.createElement('a')
+    a.href     = url
     a.download = filename.trim() || 'config.json'
     a.click()
     URL.revokeObjectURL(url)
-    lastSaved = JSON.stringify(store.entries)
-    isDirty = false
+    lastSaved = configJson
+    isDirty   = false
   }
 
-  /** Import an existing config.json into the editor. */
   async function importConfig() {
     const input = document.createElement('input')
-    input.type = 'file'
+    input.type   = 'file'
     input.accept = '.json,application/json'
     await new Promise<void>(resolve => {
       input.onchange = async () => {
@@ -187,10 +213,10 @@
           const text = await file.text()
           const data = JSON.parse(text) as Record<string, ActionConfig>
           store.load(data)
-          filename = file.name
+          filename     = file.name
           selectedNote = null
-          lastSaved = JSON.stringify(data)
-          isDirty = false
+          lastSaved    = JSON.stringify(data)
+          isDirty      = false
         } catch {
           alert('Could not parse JSON file — make sure it is a valid config.')
         }
@@ -199,6 +225,21 @@
       input.click()
     })
   }
+
+  // ── OBS scene assignment ─────────────────────────────────────────────
+
+  function handleObsSceneClick(scene: string) {
+    // If the selected note is already a static action, update its scene directly
+    const entry = selectedNote ? store.entries[selectedNote] : null
+    if (entry?.action === 'static') {
+      store.update(selectedNote!, { action: 'static', scene })
+      return
+    }
+    // Otherwise toggle pending assignment for the next note press
+    pendingObsScene = pendingObsScene === scene ? null : scene
+  }
+
+  // ── Helpers ──────────────────────────────────────────────────────────
 
   function omitUndefined(_key: string, value: unknown) {
     return value === undefined ? undefined : value
@@ -235,7 +276,7 @@
 </script>
 
 <div class="min-h-screen bg-gray-950 text-gray-100 flex flex-col">
-  <!-- ── Header ─────────────────────────────────────────────── -->
+  <!-- ── Header ───────────────────────────────────────────────────────── -->
   <header class="bg-gray-900 border-b border-gray-800 px-5 py-3 flex items-center gap-3 shrink-0">
     <div class="flex items-center gap-2">
       <span class="text-lg font-bold text-white">MIDI OBS</span>
@@ -249,7 +290,6 @@
       >Import JSON</button>
 
       {#if fileHandle}
-        <!-- File System Access API: show cached save location -->
         <span class="text-sm text-gray-300 truncate max-w-44" title={fileHandle.name}>{fileHandle.name}</span>
         <button
           onclick={() => fileHandle = null}
@@ -267,9 +307,7 @@
       {/if}
 
       <span class="text-xs whitespace-nowrap transition-colors
-        {isDirty   ? 'text-amber-400' :
-         saving    ? 'text-gray-500'  :
-                     'text-transparent select-none'}"
+        {isDirty ? 'text-amber-400' : saving ? 'text-gray-500' : 'text-transparent select-none'}"
       >{isDirty ? 'Unsaved changes' : saving ? 'Saving...' : 'Saving...'}</span>
 
       <button
@@ -277,13 +315,28 @@
         disabled={Object.keys(store.entries).length === 0}
         class="bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-500 text-white px-4 py-1.5 rounded text-sm font-medium transition-colors"
       >{fileHandle ? 'Save' : 'Export JSON'}</button>
+
+      <!-- OBS panel toggle — dot shows connection status -->
+      <button
+        onclick={() => { obsOpen = !obsOpen; if (!obsOpen) pendingObsScene = null }}
+        class="flex items-center gap-1.5 px-3 py-1.5 rounded text-sm font-medium transition-colors
+          {obsOpen ? 'bg-gray-600 text-white' : 'bg-gray-700 hover:bg-gray-600 text-gray-300'}"
+        title="Toggle OBS scene browser"
+      >
+        OBS
+        <span class="w-1.5 h-1.5 rounded-full
+          {obsStore.status === 'connected'  ? 'bg-green-400'  :
+           obsStore.status === 'connecting' ? 'bg-yellow-400' :
+           obsStore.status === 'error'      ? 'bg-red-500'    :
+           'bg-gray-500'}"
+        ></span>
+      </button>
     </div>
   </header>
 
   <div class="flex flex-1 overflow-hidden">
-    <!-- ── Sidebar ─────────────────────────────────────────── -->
+    <!-- ── Left sidebar ──────────────────────────────────────────────── -->
     <aside class="w-60 bg-gray-900 border-r border-gray-800 flex flex-col shrink-0">
-      <!-- MIDI panel -->
       <div class="p-4 border-b border-gray-800 space-y-3">
         <h2 class="text-xs font-semibold text-gray-400 uppercase tracking-wider">MIDI Input</h2>
 
@@ -312,19 +365,23 @@
           <span class="text-sm text-gray-300">Listen mode</span>
         </label>
         {#if listenMode}
-          <p class="text-xs text-blue-400">Press a pad to map it →</p>
+          <p class="text-xs text-blue-400">
+            {pendingObsScene
+              ? `Next pad → "${pendingObsScene}"`
+              : obsStore.status === 'connected'
+                ? 'Press a pad — OBS scene auto-assigned'
+                : 'Press a pad to map it →'}
+          </p>
         {/if}
       </div>
 
-      <!-- Note list -->
       <div class="flex-1 overflow-hidden flex flex-col min-h-0">
         <NoteList {selectedNote} onSelect={handleSelect} onRemove={handleRemove} />
       </div>
     </aside>
 
-    <!-- ── Main editor ─────────────────────────────────────── -->
-    <main class="flex-1 overflow-hidden flex flex-col">
-      <!-- Tab bar -->
+    <!-- ── Main area ──────────────────────────────────────────────────── -->
+    <main class="flex-1 overflow-hidden flex flex-col min-w-0">
       <div class="flex border-b border-gray-800 bg-gray-900/50 shrink-0">
         <button
           onclick={() => view = 'edit'}
@@ -338,7 +395,6 @@
         >Bulk Edit</button>
       </div>
 
-      <!-- Tab content -->
       <div class="flex-1 overflow-y-auto">
         {#if view === 'bulk'}
           <BulkEditor onEditNote={handleEditNote} />
@@ -357,5 +413,13 @@
         {/if}
       </div>
     </main>
+
+    <!-- ── OBS right panel (toggleable) ──────────────────────────────── -->
+    {#if obsOpen}
+      <ObsPanel
+        pendingScene={pendingObsScene}
+        onSceneClick={handleObsSceneClick}
+      />
+    {/if}
   </div>
 </div>
