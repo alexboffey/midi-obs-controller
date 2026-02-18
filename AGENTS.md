@@ -30,7 +30,7 @@ Single-file script (`main.py`) with no web server or UI. Connects to OBS via Web
 | `config.example.json` | Template config committed to repo |
 | `test_main.py` | Unit tests (pytest) |
 | `requirements.txt` | Python dependencies |
-| `.github/workflows/ci.yml` | CI — runs tests and dep audit on push/PR to main |
+| `.github/workflows/ci.yml` | CI — runs tests on push/PR to main; builds exe and publishes a "Latest" GitHub Release on push to main (after tests pass) |
 
 ## Tech stack
 
@@ -38,6 +38,7 @@ Single-file script (`main.py`) with no web server or UI. Connects to OBS via Web
 - `mido` + `pygame` — MIDI input (pure Python, no compiler needed)
 - `obsws-python` — OBS WebSocket client
 - `pytest` — testing
+- `pyinstaller` — builds a standalone `dist/midi-obs-controller.exe` (see README for the build command)
 
 ## Conventions
 

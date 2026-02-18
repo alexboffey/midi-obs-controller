@@ -22,3 +22,33 @@ jobs:
 
       - name: Run tests
         run: python -m pytest test_main.py -v
+
+  release:
+    needs: test
+    if: github.event_name == 'push'
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt pyinstaller
+
+      - name: Build exe
+        run: pyinstaller midi-obs-controller.spec
+
+      - name: Create or update latest release
+        uses: ncipollo/release-action@v1
+        with:
+          artifacts: dist/midi-obs-controller.exe
+          tag: latest
+          name: Latest
+          body: |
+            Automated build from [`${{ github.sha }}`](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }})
+          allowUpdates: true
+          removeArtifacts: true
+          token: ${{ secrets.GITHUB_TOKEN }}
