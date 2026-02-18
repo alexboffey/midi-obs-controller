@@ -25,6 +25,16 @@ class ConfigStore {
   defaultAction(): ActionConfig {
     return { action: 'static', scene: this.nextSceneName() }
   }
+
+  /** Replace all entries (used for import / localStorage restore). */
+  load(data: Record<string, ActionConfig>) {
+    for (const key of Object.keys(this.entries)) {
+      delete this.entries[key]
+    }
+    for (const [key, value] of Object.entries(data)) {
+      this.entries[key] = value
+    }
+  }
 }
 
 export const store = new ConfigStore()
