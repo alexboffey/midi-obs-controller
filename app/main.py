@@ -14,6 +14,30 @@ mido.set_backend("mido.backends.pygame")
 import obsws_python as obs
 
 # ---------------------------------------------------------------------------
+# Coloured logging
+# ---------------------------------------------------------------------------
+# Disable colours when not writing to a terminal (e.g. redirected to a file).
+_COLOUR = sys.stdout.isatty()
+
+
+class _C:
+    RESET  = "\033[0m"  if _COLOUR else ""
+    BOLD   = "\033[1m"  if _COLOUR else ""
+    # Semantic colour slots
+    OBS    = "\033[36m"  if _COLOUR else ""   # cyan   — OBS connection
+    MIDI   = "\033[35m"  if _COLOUR else ""   # magenta — MIDI events
+    SCENE  = "\033[32m"  if _COLOUR else ""   # green   — scene switches / loops
+    SEQ    = "\033[34m"  if _COLOUR else ""   # blue    — sequencer steps
+    WARN   = "\033[33m"  if _COLOUR else ""   # yellow  — warnings
+    ERR    = "\033[31m"  if _COLOUR else ""   # red     — errors
+    INFO   = "\033[37m"  if _COLOUR else ""   # light grey — misc info
+    DIM    = "\033[2m"   if _COLOUR else ""   # dim     — less important detail
+
+
+def _log(colour: str, tag: str, msg: str) -> None:
+    print(f"{colour}{_C.BOLD}[{tag}]{_C.RESET}{colour}  {msg}{_C.RESET}")
+
+# ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
 
@@ -154,7 +178,7 @@ def load_config(path: str = CONFIG_PATH) -> dict[int, dict]:
     Raises on invalid JSON or malformed content.
     """
     if not os.path.exists(path):
-        print(f"[config] No config file found at {path}, using defaults")
+        _log(_C.INFO, "config", f"No config file found at {path}, using defaults")
         return dict(DEFAULT_MIDI_MAP)
 
     with open(path, "r") as f:
@@ -162,7 +186,7 @@ def load_config(path: str = CONFIG_PATH) -> dict[int, dict]:
 
     midi_map = {int(k): v for k, v in raw.items()}
 
-    print(f"[config] Loaded {len(midi_map)} mappings from {path}")
+    _log(_C.INFO, "config", f"Loaded {len(midi_map)} mappings from {path}")
     return midi_map
 
 
@@ -257,12 +281,12 @@ def scene_loop(client: obs.ReqClient, sequence: list[str], tick: float, style: s
     last_scene = None
     seq_len = len(sequence)
     repeat_info = f", repeats={max_repeats}" if max_repeats is not None else ""
-    print(f"[loop] Starting {style} loop – {seq_len} steps, tick={tick}s{repeat_info}")
+    _log(_C.SCENE, "loop", f"Starting {style} loop – {seq_len} steps, tick={tick}s{repeat_info}")
     while not stop_event.is_set():
         # Check if we've completed enough repeats
         if max_repeats is not None and style != "once":
             if idx // seq_len >= max_repeats:
-                print(f"[loop] Completed {max_repeats} repeat(s).")
+                _log(_C.SCENE, "loop", f"Completed {max_repeats} repeat(s).")
                 break
 
         # Pick the next scene based on style
@@ -275,7 +299,7 @@ def scene_loop(client: obs.ReqClient, sequence: list[str], tick: float, style: s
             idx += 1
         elif style == "once":
             if idx >= seq_len:
-                print(f"[loop] Finished (once) – holding on {last_scene}")
+                _log(_C.SCENE, "loop", f"Finished (once) – holding on {last_scene}")
                 break
             scene = sequence[idx]
             idx += 1
@@ -284,12 +308,12 @@ def scene_loop(client: obs.ReqClient, sequence: list[str], tick: float, style: s
             scene = sequence[idx % seq_len]
             idx += 1
 
-        print(f"[loop] -> {scene}")
+        _log(_C.SCENE, "loop", f"→ {scene}")
         client.set_current_program_scene(scene)
         last_scene = scene
         # Use wait() instead of sleep() so we can interrupt immediately
         stop_event.wait(tick)
-    print("[loop] Stopped.")
+    _log(_C.DIM, "loop", "Stopped.")
 
 
 def start_loop(client: obs.ReqClient, prefix: str, style: str, tick: float):
@@ -301,10 +325,10 @@ def start_loop(client: obs.ReqClient, prefix: str, style: str, tick: float):
 
     scenes = get_scenes_by_prefix(client, prefix)
     if not scenes:
-        print(f"[warn] No scenes found with prefix '{prefix}'")
+        _log(_C.WARN, "warn", f"No scenes found with prefix '{prefix}'")
         return
     sequence = build_sequence(scenes, style)
-    print(f"[info] Found scenes: {scenes} (style={style}, tick={tick}s)")
+    _log(_C.INFO, "info", f"Found scenes: {scenes} (style={style}, tick={tick}s)")
 
     stop_event.clear()
     loop_thread = threading.Thread(
@@ -327,11 +351,11 @@ def stop_loop():
 def switch_to_static_scene(client: obs.ReqClient, scene_name: str):
     """Stop any running loop and switch to a specific static scene."""
     stop_loop()
-    print(f"[static] Switching to scene: {scene_name}")
+    _log(_C.SCENE, "static", f"Switching to scene: {scene_name}")
     try:
         client.set_current_program_scene(scene_name)
     except Exception as e:
-        print(f"[static] Failed to switch to '{scene_name}': {e}")
+        _log(_C.ERR, "static", f"Failed to switch to '{scene_name}': {e}")
 
 
 def run_sequence(client: obs.ReqClient, steps: list[dict], trigger_note: int = None):
@@ -352,34 +376,34 @@ def run_sequence(client: obs.ReqClient, steps: list[dict], trigger_note: int = N
     pass_num = 0
     while not stop_event.is_set():
         pass_num += 1
-        print(f"[seq] Pass {pass_num}")
+        _log(_C.SEQ, "seq", f"Pass {pass_num}")
 
         for i, step in enumerate(steps):
             if stop_event.is_set():
-                print("[seq] Cancelled.")
+                _log(_C.DIM, "seq", "Cancelled.")
                 pause_resume_note = None
                 return
 
             kind = step["action"]
 
             if kind == "stop":
-                print(f"[seq] Step {i + 1}/{len(steps)} – stop")
-                print("[seq] Sequence complete (terminal stop).")
+                _log(_C.SEQ, "seq", f"Step {i + 1}/{len(steps)} – stop")
+                _log(_C.SEQ, "seq", "Sequence complete (terminal stop).")
                 return
 
             elif kind == "static":
                 scene = step["scene"]
-                print(f"[seq] Step {i + 1}/{len(steps)} – static (scene={scene})")
+                _log(_C.SEQ, "seq", f"Step {i + 1}/{len(steps)} – static (scene={scene})")
                 try:
                     client.set_current_program_scene(scene)
                 except Exception as e:
-                    print(f"[seq] Failed to switch to '{scene}': {e}")
-                print("[seq] Sequence complete (terminal static).")
+                    _log(_C.ERR, "seq", f"Failed to switch to '{scene}': {e}")
+                _log(_C.SEQ, "seq", "Sequence complete (terminal static).")
                 return
 
             elif kind == "pause":
                 note = step.get("resume_note", trigger_note)
-                print(f"[seq] Step {i + 1}/{len(steps)} – paused (resume_note={note})")
+                _log(_C.WARN, "seq", f"Step {i + 1}/{len(steps)} – paused (resume_note={note})")
                 pause_resume_note = note
                 resume_event.clear()
 
@@ -390,9 +414,9 @@ def run_sequence(client: obs.ReqClient, steps: list[dict], trigger_note: int = N
                 pause_resume_note = None
 
                 if stop_event.is_set():
-                    print("[seq] Cancelled during pause.")
+                    _log(_C.DIM, "seq", "Cancelled during pause.")
                     return
-                print("[seq] Resumed.")
+                _log(_C.SEQ, "seq", "Resumed.")
 
             elif kind == "loop":
                 prefix = step["prefix"]
@@ -402,14 +426,14 @@ def run_sequence(client: obs.ReqClient, steps: list[dict], trigger_note: int = N
 
                 scenes = get_scenes_by_prefix(client, prefix)
                 if not scenes:
-                    print(f"[seq] Step {i + 1}/{len(steps)} – no scenes for '{prefix}', skipping")
+                    _log(_C.WARN, "seq", f"Step {i + 1}/{len(steps)} – no scenes for '{prefix}', skipping")
                     continue
 
                 sequence = build_sequence(scenes, style)
-                print(f"[seq] Step {i + 1}/{len(steps)} – {style} loop (prefix={prefix}, tick={tick:.3f}s, repeats={repeats})")
+                _log(_C.SEQ, "seq", f"Step {i + 1}/{len(steps)} – {style} loop (prefix={prefix}, tick={tick:.3f}s, repeats={repeats})")
                 scene_loop(client, sequence, tick, style, max_repeats=repeats)
 
-    print("[seq] Cancelled.")
+    _log(_C.DIM, "seq", "Cancelled.")
 
 
 def start_sequence(client: obs.ReqClient, steps: list[dict], trigger_note: int = None):
@@ -435,13 +459,13 @@ def handle_midi(msg, client: obs.ReqClient):
 
     # If a sequence is paused and this is the resume note, resume it
     if pause_resume_note is not None and msg.note == pause_resume_note:
-        print(f"[midi] note {msg.note} – resuming paused sequence")
+        _log(_C.MIDI, "midi", f"note {msg.note} – resuming paused sequence")
         resume_event.set()
         return
 
     entry = MIDI_MAP.get(msg.note)
     if entry is None:
-        print(f"[midi] note {msg.note} – unmapped, ignoring")
+        _log(_C.DIM, "midi", f"note {msg.note} – unmapped, ignoring")
         return
 
     kind = entry["action"]
@@ -450,86 +474,85 @@ def handle_midi(msg, client: obs.ReqClient):
         prefix = entry["prefix"]
         style = entry.get("style", "cycle")
         tick = calc_tick(entry["bpm"], entry["steps"])
-        print(f"[midi] note {msg.note} – {style} loop (prefix={prefix}, bpm={entry['bpm']}, steps={entry['steps']}, tick={tick:.3f}s)")
+        _log(_C.MIDI, "midi", f"note {msg.note} – {style} loop (prefix={prefix}, bpm={entry['bpm']}, steps={entry['steps']}, tick={tick:.3f}s)")
         start_loop(client, prefix, style, tick)
     elif kind == "static":
         scene = entry["scene"]
-        print(f"[midi] note {msg.note} – static scene (scene={scene})")
+        _log(_C.MIDI, "midi", f"note {msg.note} – static scene → {scene}")
         switch_to_static_scene(client, scene)
     elif kind == "sequence":
         steps = entry["steps"]
-        print(f"[midi] note {msg.note} – sequence ({len(steps)} steps)")
-        start_sequence(client, steps, trigger_note=msg.note)
+        _log(_C.MIDI, "midi", f"note {msg.note} – sequence ({len(steps)} steps)")
 
 
 def midi_debug_loop(port_name: str):
     """Open a MIDI port and log every incoming message."""
     NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
     with mido.open_input(port_name) as inport:
-        print(f"[debug] Listening on: {port_name}")
-        print("[debug] Press keys on your MIDI device … (Ctrl+C to quit)")
+        _log(_C.DIM, "debug", f"Listening on: {port_name}")
+        _log(_C.DIM, "debug", "Press keys on your MIDI device … (Ctrl+C to quit)")
         for msg in inport:
             if hasattr(msg, "note"):
                 name = NOTE_NAMES[msg.note % 12] + str(msg.note // 12 - 1)
-                print(f"[debug] {msg}  (note_name={name})")
+                _log(_C.MIDI, "debug", f"{msg}  (note_name={name})")
             else:
-                print(f"[debug] {msg}")
+                _log(_C.DIM, "debug", str(msg))
 
 
 def main():
     # --- MIDI debug mode ---
     if MIDI_DEBUG:
         available = mido.get_input_names()
-        print(f"[debug] Available MIDI inputs: {available}")
+        _log(_C.DIM, "debug", f"Available MIDI inputs: {available}")
         port_name = MIDI_PORT_NAME or (available[0] if available else None)
         if port_name is None:
-            print("[error] No MIDI input ports found. Exiting.")
+            _log(_C.ERR, "error", "No MIDI input ports found. Exiting.")
             return
         try:
             midi_debug_loop(port_name)
         except KeyboardInterrupt:
-            print("\n[debug] Done.")
+            _log(_C.DIM, "debug", "Done.")
         return
 
     # --- Connect to OBS ---
-    print(f"[obs]  Connecting to {OBS_HOST}:{OBS_PORT} …")
+    _log(_C.OBS, "obs", f"Connecting to {OBS_HOST}:{OBS_PORT} …")
     client = obs.ReqClient(host=OBS_HOST, port=OBS_PORT, password=OBS_PASSWORD, timeout=5)
     resp = client.get_version()
-    print(f"[obs]  Connected – OBS {resp.obs_version}, WebSocket {resp.obs_web_socket_version}")
+    _log(_C.OBS, "obs", f"Connected – OBS {resp.obs_version}, WebSocket {resp.obs_web_socket_version}")
 
     if TEST_MODE:
         # Skip MIDI – run the first "loop" action from MIDI_MAP
         first = next((e for e in MIDI_MAP.values() if e["action"] == "loop"), None)
         if first:
             tick = calc_tick(first["bpm"], first["steps"])
-            print(f"[test] TEST_MODE – starting loop (prefix={first['prefix']})")
+            _log(_C.INFO, "test", f"TEST_MODE – starting loop (prefix={first['prefix']})")
             start_loop(client, first["prefix"], first.get("style", "cycle"), tick)
         try:
             while True:
                 time.sleep(0.5)
         except KeyboardInterrupt:
-            print("\n[info] Shutting down.")
+            _log(_C.INFO, "info", "Shutting down.")
             stop_loop()
         return
 
     # --- Open MIDI port ---
     available = mido.get_input_names()
-    print(f"[midi] Available inputs: {available}")
+    _log(_C.MIDI, "midi", f"Available inputs: {available}")
 
     port_name = MIDI_PORT_NAME or (available[0] if available else None)
     if port_name is None:
-        print("[error] No MIDI input ports found. Exiting.")
+        _log(_C.ERR, "error", "No MIDI input ports found. Exiting.")
         return
 
-    print(f"[midi] Opening port: {port_name}")
-    print(f"[midi] Mapped notes: {list(MIDI_MAP.keys())}")
+    _log(_C.MIDI, "midi", f"Opening port: {port_name}")
+    _log(_C.MIDI, "midi", f"Mapped notes: {list(MIDI_MAP.keys())}")
     with mido.open_input(port_name) as inport:
-        print("[midi] Listening for MIDI events … (press Ctrl+C to quit)")
+        _log(_C.MIDI, "midi", "Listening for MIDI events … (press Ctrl+C to quit)")
         try:
             for msg in inport:
                 handle_midi(msg, client)
         except KeyboardInterrupt:
-            print("\n[info] Shutting down.")
+            _log(_C.INFO, "info", "Shutting down.")
             stop_loop()
 
 
