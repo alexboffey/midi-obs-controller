@@ -198,6 +198,22 @@ Edit the flags at the top of `app/main.py`:
 
 ---
 
+## Building the exe
+
+From the **repo root** with the venv activated:
+
+```powershell
+cd app
+pip install pyinstaller
+pyinstaller midi-obs-controller.spec
+```
+
+Output: `app/dist/midi-obs-controller.exe` — runs without Python installed.
+
+The CI `release` job also builds and publishes the exe automatically to the **Latest** GitHub Release on every push to `main`.
+
+---
+
 ## Tests
 
 From the **repo root**:
