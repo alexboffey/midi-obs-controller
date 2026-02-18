@@ -21,6 +21,9 @@
   let view           = $state<'edit' | 'bulk'>('edit')
   // Guard so $effects don't overwrite localStorage before onMount restores it
   let restored       = $state(false)
+  // Snapshot of the config as it was at last file save/import; '' = no file linked yet
+  let lastSaved      = $state('')
+  let isDirty        = $state(false)
 
   onMount(async () => {
     try {
@@ -66,6 +69,16 @@
     if (!restored) return
     localStorage.setItem(LS_LISTEN, String(listenMode))
     localStorage.setItem(LS_FILENAME, filename)
+  })
+
+  // Debounced dirty check — compares current entries to the last saved snapshot
+  $effect(() => {
+    if (lastSaved === '') return                     // no file linked yet
+    const current = JSON.stringify(store.entries)   // track reactive dependency
+    const timer = setTimeout(() => {
+      isDirty = current !== lastSaved
+    }, 400)
+    return () => clearTimeout(timer)
   })
 
   // Bind/unbind MIDI message handler when listenMode or device changes
@@ -120,6 +133,8 @@
         const writable = await fileHandle!.createWritable()
         await writable.write(json)
         await writable.close()
+        lastSaved = JSON.stringify(store.entries)
+        isDirty = false
         return
       } catch (e: unknown) {
         if ((e as DOMException)?.name === 'AbortError') return   // user cancelled picker
@@ -135,6 +150,8 @@
     a.download = filename.trim() || 'config.json'
     a.click()
     URL.revokeObjectURL(url)
+    lastSaved = JSON.stringify(store.entries)
+    isDirty = false
   }
 
   /** Import an existing config.json into the editor. */
@@ -152,6 +169,8 @@
           store.load(data)
           filename = file.name
           selectedNote = null
+          lastSaved = JSON.stringify(data)
+          isDirty = false
         } catch {
           alert('Could not parse JSON file — make sure it is a valid config.')
         }
@@ -225,6 +244,10 @@
           placeholder="config.json"
           title="Output filename"
         />
+      {/if}
+
+      {#if isDirty}
+        <span class="text-xs text-amber-400 whitespace-nowrap">Unsaved changes</span>
       {/if}
 
       <button
