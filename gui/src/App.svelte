@@ -23,7 +23,7 @@
   let midiError       = $state('')
   let fileHandle      = $state<FileSystemFileHandle | null>(null)
   let view            = $state<'edit' | 'bulk'>('edit')
-  let obsOpen         = $state(false)
+  let obsOpen         = $state(true)
   let pendingObsScene = $state<string | null>(null)
   // Guard so $effects don't overwrite localStorage before onMount restores it
   let restored        = $state(false)

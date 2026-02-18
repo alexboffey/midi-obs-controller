@@ -8,6 +8,14 @@
     onRemove: (noteStr: string) => void
   }>()
 
+  function actionSubtitle(key: string): string | null {
+    const cfg = store.entries[key]
+    if (!cfg) return null
+    if (cfg.action === 'static') return cfg.scene || null
+    if (cfg.action === 'loop') return cfg.prefix ? `${cfg.prefix}…` : null
+    return null
+  }
+
   let newNote = $state('')
 
   const sortedNotes = $derived(
@@ -36,6 +44,7 @@
     {#each sortedNotes as note}
       {@const key = String(note)}
       {@const action = store.entries[key]?.action}
+      {@const subtitle = actionSubtitle(key)}
       <li class="group">
         <button
           onclick={() => onSelect(key)}
@@ -44,22 +53,27 @@
               ? 'bg-blue-600 text-white'
               : 'text-gray-300 hover:bg-gray-800'}"
         >
-          <span class="flex items-center gap-2 min-w-0">
-            <span class="font-mono shrink-0">{note}</span>
-            <span class="opacity-60 shrink-0">{noteName(note)}</span>
-            <span class="text-xs px-1.5 py-0.5 rounded shrink-0
-              {action === 'loop'     ? (selectedNote === key ? 'bg-white/20 text-white' : 'bg-blue-900/60 text-blue-300') :
-               action === 'static'   ? (selectedNote === key ? 'bg-white/20 text-white' : 'bg-green-900/60 text-green-300') :
-               action === 'sequence' ? (selectedNote === key ? 'bg-white/20 text-white' : 'bg-purple-900/60 text-purple-300') :
-               'bg-gray-700 text-gray-400'}"
-            >{action}</span>
+          <span class="flex flex-col min-w-0 gap-0.5">
+            <span class="flex items-center gap-2">
+              <span class="font-mono shrink-0">{note}</span>
+              <span class="opacity-60 shrink-0">{noteName(note)}</span>
+              <span class="text-xs px-1.5 py-0.5 rounded shrink-0
+                {action === 'loop'     ? (selectedNote === key ? 'bg-white/20 text-white' : 'bg-blue-900/60 text-blue-300') :
+                 action === 'static'   ? (selectedNote === key ? 'bg-white/20 text-white' : 'bg-green-900/60 text-green-300') :
+                 action === 'sequence' ? (selectedNote === key ? 'bg-white/20 text-white' : 'bg-purple-900/60 text-purple-300') :
+                 'bg-gray-700 text-gray-400'}"
+              >{action}</span>
+            </span>
+            {#if subtitle}
+              <span class="text-xs truncate {selectedNote === key ? 'text-blue-200' : 'text-gray-500'}">{subtitle}</span>
+            {/if}
           </span>
           <span
             role="button"
             tabindex="0"
             onclick={(e) => { e.stopPropagation(); onRemove(key) }}
             onkeydown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); onRemove(key) } }}
-            class="opacity-0 group-hover:opacity-100 hover:text-red-400 pl-2 text-lg leading-none shrink-0 transition-opacity"
+            class="opacity-0 group-hover:opacity-100 hover:text-red-400 pl-2 text-lg leading-none shrink-0 transition-opacity self-center"
             aria-label="Remove note {note}"
           >×</span>
         </button>

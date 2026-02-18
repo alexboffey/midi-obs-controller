@@ -57,6 +57,7 @@
         type="password"
         bind:value={obsStore.password}
         placeholder="Password (if set)"
+        autocomplete="off"
         class="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs text-gray-200 placeholder-gray-600"
         title="OBS WebSocket password"
       />

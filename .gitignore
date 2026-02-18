@@ -15,6 +15,7 @@ build/
 
 # User config (use config.example.json as a template)
 config.json
+config.test.json
 
 # Environment variables
 .env
