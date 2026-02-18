@@ -24,6 +24,8 @@
   // Snapshot of the config as it was at last file save/import; '' = no file linked yet
   let lastSaved      = $state('')
   let isDirty        = $state(false)
+  // Brief "Saving..." pulse shown while localStorage auto-save is in flight
+  let saving         = $state(false)
 
   onMount(async () => {
     try {
@@ -58,10 +60,13 @@
     }
   }
 
-  // Auto-save config entries whenever they change
+  // Auto-save config entries; pulse the saving indicator while writing
   $effect(() => {
     if (!restored) return
     localStorage.setItem(LS_CONFIG, JSON.stringify(store.entries))
+    saving = true
+    const timer = setTimeout(() => { saving = false }, 800)
+    return () => clearTimeout(timer)
   })
 
   // Auto-save listenMode and filename
@@ -69,6 +74,18 @@
     if (!restored) return
     localStorage.setItem(LS_LISTEN, String(listenMode))
     localStorage.setItem(LS_FILENAME, filename)
+  })
+
+  // Warn before closing/refreshing when there are unsaved file changes
+  $effect(() => {
+    const handle = (e: BeforeUnloadEvent) => {
+      if (isDirty) {
+        e.preventDefault()
+        e.returnValue = ''
+      }
+    }
+    window.addEventListener('beforeunload', handle)
+    return () => window.removeEventListener('beforeunload', handle)
   })
 
   // Debounced dirty check — compares current entries to the last saved snapshot
@@ -246,9 +263,11 @@
         />
       {/if}
 
-      {#if isDirty}
-        <span class="text-xs text-amber-400 whitespace-nowrap">Unsaved changes</span>
-      {/if}
+      <span class="text-xs whitespace-nowrap transition-colors
+        {isDirty   ? 'text-amber-400' :
+         saving    ? 'text-gray-500'  :
+                     'text-transparent select-none'}"
+      >{isDirty ? 'Unsaved changes' : saving ? 'Saving...' : 'Saving...'}</span>
 
       <button
         onclick={exportConfig}
