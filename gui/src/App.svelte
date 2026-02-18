@@ -26,6 +26,9 @@
   let isDirty        = $state(false)
   // Brief "Saving..." pulse shown while localStorage auto-save is in flight
   let saving         = $state(false)
+  // Derived JSON string — computed inside a reactive context so Svelte tracks
+  // both new-key additions and existing-value mutations on store.entries
+  const configJson   = $derived(JSON.stringify(store.entries))
 
   onMount(async () => {
     try {
@@ -63,7 +66,7 @@
   // Auto-save config entries; pulse the saving indicator while writing
   $effect(() => {
     if (!restored) return
-    localStorage.setItem(LS_CONFIG, JSON.stringify(store.entries))
+    localStorage.setItem(LS_CONFIG, configJson)
     saving = true
     const timer = setTimeout(() => { saving = false }, 800)
     return () => clearTimeout(timer)
@@ -90,8 +93,8 @@
 
   // Debounced dirty check — compares current entries to the last saved snapshot
   $effect(() => {
-    if (lastSaved === '') return                     // no file linked yet
-    const current = JSON.stringify(store.entries)   // track reactive dependency
+    if (lastSaved === '') return           // no file linked yet
+    const current = configJson            // $derived ensures new keys + mutations are tracked
     const timer = setTimeout(() => {
       isDirty = current !== lastSaved
     }, 400)
