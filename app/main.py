@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 import mido
-mido.set_backend("mido.backends.pygame")
+mido.set_backend("mido.backends.rtmidi")
 import obsws_python as obs
 
 # ---------------------------------------------------------------------------
@@ -222,7 +222,8 @@ def pick_config_file(config_files: list[str]) -> str | None:
 
 _config_files = find_config_files()
 _chosen = pick_config_file(_config_files)
-MIDI_MAP = load_config(_chosen if _chosen is not None else CONFIG_PATH)
+_active_config = _chosen if _chosen is not None else CONFIG_PATH
+MIDI_MAP = load_config(_active_config)
 
 # ---------------------------------------------------------------------------
 # Globals
@@ -232,6 +233,29 @@ stop_event = threading.Event()    # set() to signal the loop to stop
 resume_event = threading.Event()  # set() to resume from a pause
 pause_resume_note = None  # type: int | None  — MIDI note that resumes the current pause
 loop_thread = None  # type: threading.Thread | None
+_shutdown_event = threading.Event()  # set() only on full program exit (not between loops)
+
+
+def _watch_config(path: str) -> None:
+    """Background thread: reload MIDI_MAP whenever the config file changes on disk."""
+    global MIDI_MAP
+    try:
+        mtime = os.path.getmtime(path)
+    except OSError:
+        mtime = 0.0
+    while not _shutdown_event.wait(1.0):
+        try:
+            new_mtime = os.path.getmtime(path)
+        except OSError:
+            continue
+        if new_mtime != mtime:
+            try:
+                new_map = load_config(path)
+                MIDI_MAP = new_map   # atomic reference swap under the GIL
+                mtime = new_mtime    # only advance after a clean load
+                _log(_C.INFO, "config", f"Config reloaded ({len(MIDI_MAP)} mappings) from {os.path.basename(path)}")
+            except Exception as exc:
+                _log(_C.WARN, "config", f"Config reload failed (will retry): {exc}")
 
 
 def calc_tick(bpm: float, steps: float) -> float:
@@ -491,12 +515,14 @@ def midi_debug_loop(port_name: str):
     with mido.open_input(port_name) as inport:
         _log(_C.DIM, "debug", f"Listening on: {port_name}")
         _log(_C.DIM, "debug", "Press keys on your MIDI device … (Ctrl+C to quit)")
-        for msg in inport:
-            if hasattr(msg, "note"):
-                name = NOTE_NAMES[msg.note % 12] + str(msg.note // 12 - 1)
-                _log(_C.MIDI, "debug", f"{msg}  (note_name={name})")
-            else:
-                _log(_C.DIM, "debug", str(msg))
+        while True:
+            for msg in inport.iter_pending():
+                if hasattr(msg, "note"):
+                    name = NOTE_NAMES[msg.note % 12] + str(msg.note // 12 - 1)
+                    _log(_C.MIDI, "debug", f"{msg}  (note_name={name})")
+                else:
+                    _log(_C.DIM, "debug", str(msg))
+            time.sleep(0.001)
 
 
 def main():
@@ -544,15 +570,22 @@ def main():
         _log(_C.ERR, "error", "No MIDI input ports found. Exiting.")
         return
 
+    # --- Watch config file for live changes ---
+    _log(_C.INFO, "config", f"Watching config: {os.path.basename(_active_config)}")
+    threading.Thread(target=_watch_config, args=(_active_config,), daemon=True).start()
+
     _log(_C.MIDI, "midi", f"Opening port: {port_name}")
     _log(_C.MIDI, "midi", f"Mapped notes: {list(MIDI_MAP.keys())}")
     with mido.open_input(port_name) as inport:
         _log(_C.MIDI, "midi", "Listening for MIDI events … (press Ctrl+C to quit)")
         try:
-            for msg in inport:
-                handle_midi(msg, client)
+            while True:
+                for msg in inport.iter_pending():
+                    handle_midi(msg, client)
+                time.sleep(0.001)
         except KeyboardInterrupt:
             _log(_C.INFO, "info", "Shutting down.")
+            _shutdown_event.set()
             stop_loop()
 
 

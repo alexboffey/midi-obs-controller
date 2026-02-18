@@ -247,14 +247,32 @@
   // ── OBS scene assignment ─────────────────────────────────────────────
 
   function handleObsSceneClick(scene: string) {
-    // If the selected note is already a static action, update its scene directly
     const entry = selectedNote ? store.entries[selectedNote] : null
     if (entry?.action === 'static') {
-      store.update(selectedNote!, { action: 'static', scene })
-      return
+      // Only directly assign if this scene isn't already used by a different note.
+      // Clicking an already-assigned scene to "see" which note has it is a common
+      // mistake that silently overwrites the selected note's scene.
+      const takenByOther = Object.entries(store.entries).some(
+        ([n, a]) => n !== selectedNote && a.action === 'static' && a.scene === scene
+      )
+      if (!takenByOther) {
+        store.update(selectedNote!, { action: 'static', scene })
+        return
+      }
     }
-    // Otherwise toggle pending assignment for the next note press
+    // Toggle pending assignment for the next note press
     pendingObsScene = pendingObsScene === scene ? null : scene
+  }
+
+  function newConfig() {
+    store.load({})
+    selectedNote  = null
+    filename      = 'config.json'
+    fileHandle    = null
+    lastSaved     = ''
+    isDirty       = false
+    localStorage.removeItem(LS_CONFIG)
+    localStorage.removeItem(LS_FILENAME)
   }
 
   // ── Helpers ──────────────────────────────────────────────────────────
@@ -302,6 +320,11 @@
     </div>
 
     <div class="flex items-center gap-2 ml-auto">
+      <button
+        onclick={newConfig}
+        class="bg-gray-700 hover:bg-gray-600 text-gray-200 px-4 py-1.5 rounded text-sm font-medium transition-colors"
+        title="Clear all mappings and start fresh"
+      >New</button>
       <button
         onclick={importConfig}
         class="bg-gray-700 hover:bg-gray-600 text-gray-200 px-4 py-1.5 rounded text-sm font-medium transition-colors"
