@@ -1,9 +1,10 @@
 <script lang="ts">
   import { onMount } from 'svelte'
   import { store } from './lib/store.svelte.js'
-  import type { ActionConfig } from './lib/types.js'
+  import type { ActionConfig, SequenceStepAction } from './lib/types.js'
   import NoteList from './components/NoteList.svelte'
   import NoteEditor from './components/NoteEditor.svelte'
+  import BulkEditor from './components/BulkEditor.svelte'
 
   const LS_CONFIG   = 'midi-obs-config'
   const LS_LISTEN   = 'midi-obs-listen'
@@ -17,6 +18,7 @@
   let filename       = $state('config.json')
   let midiError      = $state('')
   let fileHandle     = $state<FileSystemFileHandle | null>(null)
+  let view           = $state<'edit' | 'bulk'>('edit')
   // Guard so $effects don't overwrite localStorage before onMount restores it
   let restored       = $state(false)
 
@@ -170,7 +172,7 @@
     return action
   }
 
-  function cleanStep(step: ActionConfig): ActionConfig {
+  function cleanStep(step: SequenceStepAction): SequenceStepAction {
     if (step.action === 'pause' && step.resume_note === undefined) {
       return { action: 'pause' }
     }
@@ -179,11 +181,17 @@
 
   function handleSelect(noteStr: string) {
     selectedNote = noteStr
+    view = 'edit'
   }
 
   function handleRemove(noteStr: string) {
     store.remove(noteStr)
     if (selectedNote === noteStr) selectedNote = null
+  }
+
+  function handleEditNote(noteStr: string) {
+    selectedNote = noteStr
+    view = 'edit'
   }
 </script>
 
@@ -270,18 +278,39 @@
     </aside>
 
     <!-- ── Main editor ─────────────────────────────────────── -->
-    <main class="flex-1 overflow-y-auto p-6">
-      {#if selectedNote !== null && store.entries[selectedNote]}
-        <NoteEditor noteStr={selectedNote} />
-      {:else}
-        <div class="flex flex-col items-center justify-center h-full gap-4 text-center">
-          <div class="text-6xl opacity-20">🎹</div>
-          <div>
-            <p class="text-gray-500 text-sm">Select a note from the sidebar</p>
-            <p class="text-gray-600 text-xs mt-1">or turn on listen mode and press a pad</p>
+    <main class="flex-1 overflow-hidden flex flex-col">
+      <!-- Tab bar -->
+      <div class="flex border-b border-gray-800 bg-gray-900/50 shrink-0">
+        <button
+          onclick={() => view = 'edit'}
+          class="px-5 py-2.5 text-sm font-medium border-b-2 transition-colors
+            {view === 'edit' ? 'border-blue-500 text-white' : 'border-transparent text-gray-500 hover:text-gray-300'}"
+        >Edit Note</button>
+        <button
+          onclick={() => view = 'bulk'}
+          class="px-5 py-2.5 text-sm font-medium border-b-2 transition-colors
+            {view === 'bulk' ? 'border-blue-500 text-white' : 'border-transparent text-gray-500 hover:text-gray-300'}"
+        >Bulk Edit</button>
+      </div>
+
+      <!-- Tab content -->
+      <div class="flex-1 overflow-y-auto">
+        {#if view === 'bulk'}
+          <BulkEditor onEditNote={handleEditNote} />
+        {:else if selectedNote !== null && store.entries[selectedNote]}
+          <div class="p-6">
+            <NoteEditor noteStr={selectedNote} />
           </div>
-        </div>
-      {/if}
+        {:else}
+          <div class="flex flex-col items-center justify-center h-full gap-4 text-center">
+            <div class="text-6xl opacity-20">🎹</div>
+            <div>
+              <p class="text-gray-500 text-sm">Select a note from the sidebar</p>
+              <p class="text-gray-600 text-xs mt-1">or turn on listen mode and press a pad</p>
+            </div>
+          </div>
+        {/if}
+      </div>
     </main>
   </div>
 </div>
