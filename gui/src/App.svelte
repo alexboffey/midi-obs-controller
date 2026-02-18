@@ -18,6 +18,7 @@
   let midiAccess      = $state<MIDIAccess | null>(null)
   let midiInputs      = $state<MIDIInput[]>([])
   let selectedInputId = $state('')
+  let midiConnected   = $state(false)
   let listenMode      = $state(false)
   let filename        = $state('config.json')
   let midiError       = $state('')
@@ -51,17 +52,34 @@
 
     if (!navigator.requestMIDIAccess) {
       midiError = 'Web MIDI API not available. Use Chrome or Edge on localhost / HTTPS.'
-      return
     }
+  })
+
+  async function connectMidi() {
+    midiError = ''
     try {
       const access = await navigator.requestMIDIAccess()
       midiAccess = access
+      midiConnected = true
       updateInputs()
       access.onstatechange = updateInputs
     } catch (e: unknown) {
       midiError = `MIDI access denied: ${e instanceof Error ? e.message : String(e)}`
     }
-  })
+  }
+
+  async function disconnectMidi() {
+    listenMode = false
+    if (midiAccess) {
+      for (const input of midiAccess.inputs.values()) {
+        input.onmidimessage = null
+        await input.close()
+      }
+    }
+    midiAccess = null
+    midiInputs = []
+    midiConnected = false
+  }
 
   function updateInputs() {
     if (!midiAccess) return
@@ -338,10 +356,28 @@
     <!-- ── Left sidebar ──────────────────────────────────────────────── -->
     <aside class="w-60 bg-gray-900 border-r border-gray-800 flex flex-col shrink-0">
       <div class="p-4 border-b border-gray-800 space-y-3">
-        <h2 class="text-xs font-semibold text-gray-400 uppercase tracking-wider">MIDI Input</h2>
+        <div class="flex items-center justify-between">
+          <h2 class="text-xs font-semibold text-gray-400 uppercase tracking-wider">MIDI Input</h2>
+          {#if !midiError}
+            {#if midiConnected}
+              <button
+                onclick={disconnectMidi}
+                class="text-xs text-gray-400 hover:text-red-400 transition-colors"
+                title="Release MIDI port so other apps (e.g. the Python script) can use it"
+              >Disconnect</button>
+            {:else}
+              <button
+                onclick={connectMidi}
+                class="text-xs text-blue-400 hover:text-blue-300 transition-colors"
+              >Connect</button>
+            {/if}
+          {/if}
+        </div>
 
         {#if midiError}
           <p class="text-xs text-red-400 leading-relaxed">{midiError}</p>
+        {:else if !midiConnected}
+          <p class="text-xs text-gray-600 leading-relaxed">Disconnected — click Connect to<br />access your MIDI device.</p>
         {:else if midiInputs.length === 0}
           <p class="text-xs text-gray-500">No MIDI devices found.<br />Plug in a device and refresh.</p>
         {:else}
@@ -355,23 +391,24 @@
           </select>
         {/if}
 
-        <label class="flex items-center gap-2.5 cursor-pointer select-none">
-          <input
-            type="checkbox"
-            bind:checked={listenMode}
-            disabled={midiInputs.length === 0 || !!midiError}
-            class="w-4 h-4 accent-blue-500"
-          />
-          <span class="text-sm text-gray-300">Listen mode</span>
-        </label>
-        {#if listenMode}
-          <p class="text-xs text-blue-400">
-            {pendingObsScene
-              ? `Next pad → "${pendingObsScene}"`
-              : obsStore.status === 'connected'
-                ? 'Press a pad — OBS scene auto-assigned'
-                : 'Press a pad to map it →'}
-          </p>
+        {#if midiConnected && midiInputs.length > 0}
+          <label class="flex items-center gap-2.5 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              bind:checked={listenMode}
+              class="w-4 h-4 accent-blue-500"
+            />
+            <span class="text-sm text-gray-300">Listen mode</span>
+          </label>
+          {#if listenMode}
+            <p class="text-xs text-blue-400">
+              {pendingObsScene
+                ? `Next pad → "${pendingObsScene}"`
+                : obsStore.status === 'connected'
+                  ? 'Press a pad — OBS scene auto-assigned'
+                  : 'Press a pad to map it →'}
+            </p>
+          {/if}
         {/if}
       </div>
 

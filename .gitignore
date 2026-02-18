@@ -27,3 +27,6 @@ Thumbs.db
 # GUI (Svelte/Vite)
 gui/node_modules/
 gui/dist/
+
+# claude
+.claude/

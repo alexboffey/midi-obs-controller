@@ -23,13 +23,15 @@ See [gui/README.md](gui/README.md) for full GUI documentation.
 
 ## Python App Setup
 
+> **Requires Python 3.12.** Python 3.13+ is not supported — `pygame` has no pre-built wheels for it and will fail to install. Download Python 3.12 from [python.org](https://www.python.org/downloads/release/python-31210/) if needed.
+
 Run these commands from the **repo root**:
 
 **macOS / Linux:**
 
 ```bash
 cd app
-python3 -m venv .venv
+python3.12 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 ```
@@ -38,7 +40,7 @@ pip install -r requirements.txt
 
 ```powershell
 cd app
-py -3 -m venv .venv
+py -3.12 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 ```
@@ -50,7 +52,7 @@ pip install -r requirements.txt
 
 ```cmd
 cd app
-python -m venv .venv
+py -3.12 -m venv .venv
 .venv\Scripts\activate.bat
 pip install -r requirements.txt
 ```
