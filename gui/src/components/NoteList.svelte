@@ -19,7 +19,7 @@
     if (isNaN(n) || n < 0 || n > 127) return
     const key = String(n)
     if (!store.entries[key]) {
-      store.add(key, { action: 'loop', prefix: 'LOOP_A_', style: 'cycle', bpm: 120, steps: 4 })
+      store.add(key, store.defaultAction())
     }
     onSelect(key)
     newNote = ''

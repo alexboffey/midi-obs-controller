@@ -55,7 +55,7 @@
     if (!isNoteOn) return
     const key = String(note)
     if (!store.entries[key]) {
-      store.add(key, { action: 'loop', prefix: 'LOOP_A_', style: 'cycle', bpm: 120, steps: 4 })
+      store.add(key, store.defaultAction())
     }
     selectedNote = key
   }

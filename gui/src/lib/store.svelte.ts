@@ -14,6 +14,17 @@ class ConfigStore {
   update(noteStr: string, action: ActionConfig) {
     this.entries[noteStr] = action
   }
+
+  /** Returns the next auto-incremented scene name, e.g. "Scene 3". */
+  nextSceneName(): string {
+    const count = Object.values(this.entries).filter(e => e.action === 'static').length
+    return `Scene ${count + 1}`
+  }
+
+  /** Default action for a newly mapped note. */
+  defaultAction(): ActionConfig {
+    return { action: 'static', scene: this.nextSceneName() }
+  }
 }
 
 export const store = new ConfigStore()
