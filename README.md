@@ -5,22 +5,6 @@ Supports looping, static scenes, pause/resume, and multi-step sequences.
 
 ---
 
-## Config Builder GUI
-
-The easiest way to build your `config.json` is the web GUI — available at the GitHub Pages deployment or run it locally from the **repo root**:
-
-```bash
-cd gui
-npm install
-npm run dev
-```
-
-Open the app, connect your MIDI device, press pads in listen mode to map them, browse your live OBS scene list, then export the file directly into `app/`.
-
-See [gui/README.md](gui/README.md) for full GUI documentation.
-
----
-
 ## Python App Setup
 
 > **Requires Python 3.12.** Python 3.13+ is not supported — `pygame` has no pre-built wheels for it and will fail to install. Download Python 3.12 from [python.org](https://www.python.org/downloads/release/python-31210/) if needed.
@@ -73,7 +57,9 @@ OBS_PASSWORD=your_password
 
 ### MIDI map
 
-Copy the example config and edit it, or use the GUI to generate it:
+The easiest way to create your MIDI map is the **[web-based Config Builder](https://alexboffey.github.io/midi-obs-controller/)** — no install required. Connect your MIDI device, enable listen mode and press pads to auto-map them, browse your live OBS scene list, then export `config.json` directly into `app/`. See [gui/README.md](gui/README.md) for full details.
+
+Alternatively, copy the example config and edit it by hand:
 
 ```bash
 cp app/config.example.json app/config.json
