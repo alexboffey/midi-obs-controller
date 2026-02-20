@@ -1,4 +1,4 @@
-# MIDI → OBS Scene Controller
+# MIDI → OBS Scene Controller <!-- test -->
 
 Listens for MIDI input and switches OBS scenes based on a configurable note map.
 Supports looping, static scenes, pause/resume, and multi-step sequences.
